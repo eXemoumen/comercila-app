@@ -1,0 +1,35 @@
+export interface Sale {
+  id: string;
+  date: string;
+  supermarketId: string;
+  quantity: number;
+  pricePerUnit: number;
+  totalValue: number;
+}
+
+export interface Supermarket {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  email: string;
+  totalSales: number;
+  totalValue: number;
+}
+
+export interface Stock {
+  id: string;
+  date: string;
+  type: 'added' | 'removed' | 'adjusted';
+  quantity: number;
+  currentStock: number;
+}
+
+export interface Order {
+  id: string;
+  date: string;
+  supermarketId: string;
+  supermarketName: string;
+  quantity: number;
+  status: 'pending' | 'completed' | 'cancelled';
+} 
