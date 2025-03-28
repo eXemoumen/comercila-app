@@ -4,8 +4,16 @@ interface Sale {
   date: string;
   supermarketId: string;
   quantity: number;
+  cartons: number;
   pricePerUnit: number;
   totalValue: number;
+  isPaid: boolean;
+  paymentDate?: string;
+  paymentNote?: string;
+  expectedPaymentDate?: string;
+  payments: Payment[];
+  remainingAmount: number;
+  fromOrder?: boolean;
 }
 
 interface Supermarket {
@@ -36,6 +44,13 @@ interface Order {
   completedDate?: string;
 }
 
+interface Payment {
+  id: string;
+  date: string;
+  amount: number;
+  note?: string;
+}
+
 // Storage Keys
 const SALES_KEY = 'soap_sales';
 const SUPERMARKETS_KEY = 'soap_supermarkets';
@@ -50,21 +65,15 @@ export const getSales = (): Sale[] => {
   return sales ? JSON.parse(sales) : [];
 };
 
-export const addSale = (sale: Omit<Sale, 'id'>) => {
+export const addSale = (saleData: Omit<Sale, 'id'>) => {
   if (typeof window === 'undefined') return null;
   const sales = getSales();
   const newSale = {
-    ...sale,
+    ...saleData,
     id: Date.now().toString(),
   };
   sales.push(newSale);
   localStorage.setItem(SALES_KEY, JSON.stringify(sales));
-  
-  // Update supermarket stats
-  updateSupermarketStats(newSale.supermarketId, newSale.quantity, newSale.totalValue);
-  // Update stock
-  updateStock(-newSale.quantity, 'removed', 'Vente');
-  
   return newSale;
 };
 
@@ -180,6 +189,52 @@ export const completeOrder = (orderId: string) => {
     updateSupermarketStats(order.supermarketId, order.quantity);
     
     return orders[orderIndex];
+  }
+  return null;
+};
+
+// Add function to update payment status
+export const updateSalePayment = (saleId: string, isPaid: boolean) => {
+  if (typeof window === 'undefined') return null;
+  const sales = getSales();
+  const saleIndex = sales.findIndex(s => s.id === saleId);
+  
+  if (saleIndex !== -1) {
+    sales[saleIndex] = {
+      ...sales[saleIndex],
+      isPaid,
+      paymentDate: isPaid ? new Date().toISOString() : undefined
+    };
+    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+    return sales[saleIndex];
+  }
+  return null;
+};
+
+export const addPayment = (saleId: string, payment: Omit<Payment, 'id'>) => {
+  if (typeof window === 'undefined') return null;
+  const sales = getSales();
+  const saleIndex = sales.findIndex(s => s.id === saleId);
+  
+  if (saleIndex !== -1) {
+    const newPayment = {
+      ...payment,
+      id: Date.now().toString()
+    };
+    
+    const sale = sales[saleIndex];
+    const newRemainingAmount = sale.remainingAmount - payment.amount;
+    
+    sales[saleIndex] = {
+      ...sale,
+      payments: [...sale.payments, newPayment],
+      remainingAmount: newRemainingAmount,
+      isPaid: newRemainingAmount <= 0,
+      paymentDate: newRemainingAmount <= 0 ? new Date().toISOString() : undefined
+    };
+    
+    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+    return sales[saleIndex];
   }
   return null;
 }; 

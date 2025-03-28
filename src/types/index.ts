@@ -1,10 +1,24 @@
+export interface Payment {
+  id: string;
+  date: string;
+  amount: number;
+  note?: string;
+}
+
 export interface Sale {
   id: string;
   date: string;
   supermarketId: string;
   quantity: number;
+  cartons: number;
   pricePerUnit: number;
   totalValue: number;
+  isPaid: boolean;
+  paymentDate?: string;
+  paymentNote?: string;
+  expectedPaymentDate?: string;
+  payments: Payment[];
+  remainingAmount: number;
 }
 
 export interface Supermarket {
