@@ -58,6 +58,12 @@ export default function PendingPaymentsPage() {
     window.location.reload();
   };
 
+  const handleBack = () => {
+    // Store the active tab in localStorage before navigating back
+    localStorage.setItem("activeTab", "dashboard");
+    router.push("/");
+  };
+
   return (
     <div className="space-y-4 pb-20">
       <div className="flex items-center justify-between mb-5">
@@ -65,7 +71,7 @@ export default function PendingPaymentsPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.back()}
+            onClick={handleBack}
             className="mr-1"
           >
             <ChevronLeft className="h-5 w-5" />

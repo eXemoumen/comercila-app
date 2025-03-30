@@ -32,7 +32,6 @@ interface Stock {
   type: 'added' | 'removed' | 'adjusted';
   quantity: number;
   currentStock: number;
-  reason: string;
 }
 
 interface Order {
@@ -41,9 +40,8 @@ interface Order {
   supermarketId: string;
   supermarketName: string;
   quantity: number;
+  status: "pending" | "delivered" | "cancelled";
   pricePerUnit: number;
-  status: 'pending' | 'completed';
-  completedDate?: string;
 }
 
 interface Payment {
@@ -143,8 +141,7 @@ export const updateStock = (quantity: number, type: Stock['type'], reason: strin
     date: new Date().toISOString(),
     type,
     quantity,
-    currentStock: newStock,
-    reason
+    currentStock: newStock
   });
   localStorage.setItem(STOCK_KEY, JSON.stringify(stockHistory));
   
@@ -188,8 +185,7 @@ export const completeOrder = (orderId: string) => {
     const order = orders[orderIndex];
     orders[orderIndex] = {
       ...order,
-      status: 'completed',
-      completedDate: new Date().toISOString()
+      status: 'delivered'
     };
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
     

@@ -245,6 +245,15 @@ export default function Dashboard() {
     calculateMonthlyBenefits();
   }, []);
 
+  // Add this effect to check localStorage for active tab
+  useEffect(() => {
+    const savedTab = localStorage.getItem("activeTab");
+    if (savedTab) {
+      setActiveTab(savedTab);
+      localStorage.removeItem("activeTab"); // Clear it after using
+    }
+  }, []);
+
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
@@ -2088,12 +2097,13 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
     if (selectedSupermarket) {
       const unitsQuantity = newOrder.cartons * 9; // Convert cartons to units
       const pricePerUnit = newOrder.priceOption === "option1" ? 180 : 166;
-      const order: Omit<Order, "id" | "status"> = {
+      const order: Omit<Order, "id"> = {
         date: newOrder.date,
         supermarketId: newOrder.supermarketId,
         supermarketName: selectedSupermarket.name,
         quantity: unitsQuantity,
         pricePerUnit,
+        status: "pending",
       };
 
       addOrder(order);

@@ -9,14 +9,15 @@ export interface Sale {
   id: string;
   date: string;
   supermarketId: string;
+  supermarketName?: string;
   quantity: number;
-  cartons: number;
   pricePerUnit: number;
-  totalValue: number;
+  cartons: number;
   isPaid: boolean;
+  expectedPaymentDate?: string;
+  totalValue: number;
   paymentDate?: string;
   paymentNote?: string;
-  expectedPaymentDate?: string;
   payments: Payment[];
   remainingAmount: number;
 }
@@ -45,7 +46,6 @@ export interface Order {
   supermarketId: string;
   supermarketName: string;
   quantity: number;
+  status: "pending" | "delivered" | "cancelled";
   pricePerUnit: number;
-  status: 'pending' | 'completed';
-  completedDate?: string;
 } 
