@@ -1,10 +1,4 @@
-'use client';
-
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, Plus } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
+"use client";
 
 interface Payment {
   id: string;
@@ -27,7 +21,30 @@ interface PendingPaymentsPageProps {
   onBack: () => void;
 }
 
-export function PendingPaymentsPageClient({ onBack }: PendingPaymentsPageProps) {
-  // ... [Previous component code remains the same]
-  // Copy all the content from the previous component here
-} 
+export function PendingPaymentsPageClient({
+  onBack,
+}: PendingPaymentsPageProps) {
+  // Example data for demonstration purposes
+  const pendingSales: Sale[] = []; // Replace with actual data fetching logic
+
+  return (
+    <div>
+      <button onClick={onBack}>Back</button>
+      <h1>Pending Payments</h1>
+      {pendingSales.length === 0 ? (
+        <p>No pending payments available.</p>
+      ) : (
+        <ul>
+          {pendingSales.map((sale) => (
+            <li key={sale.id}>
+              <p>Sale ID: {sale.id}</p>
+              <p>Total Value: {sale.totalValue}</p>
+              <p>Remaining Amount: {sale.remainingAmount}</p>
+              <p>Is Paid: {sale.isPaid ? "Yes" : "No"}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

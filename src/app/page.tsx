@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
 import {
   Calendar,
   Home,
@@ -26,7 +27,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { translations } from "@/translations";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,13 +40,11 @@ import {
   getCurrentStock,
   updateStock,
   addSupermarket,
-  completeOrder,
   getSales,
   updateSalePayment,
   addPayment,
 } from "@/utils/storage";
-import { Sale, Supermarket, Order, Payment } from "@/types";
-
+import { Sale, Supermarket, Order } from "@/types";
 
 interface SupermarketsPageProps {
   onBack: () => void;
@@ -58,13 +57,30 @@ interface SupermarketProfilePageProps {
   setActiveTab: (tab: string) => void;
 }
 
-interface PendingPaymentsPageProps {
-  onBack: () => void;
-}
-
 interface OrdersPageProps {
   onBack: () => void;
   onCompleteOrder: (order: Order) => void;
+}
+
+interface AddSalePageProps {
+  onBack: () => void;
+  preFillData?: {
+    supermarketId: string;
+    quantity: number;
+    orderId?: string;
+  } | null;
+}
+
+interface StockPageProps {
+  onBack: () => void;
+}
+
+interface StockHistoryItem {
+  id: string;
+  date: string;
+  quantity: number;
+  type?: "added" | "removed" | "adjusted";
+  reason?: string;
 }
 
 export default function Dashboard() {
@@ -497,7 +513,8 @@ export default function Dashboard() {
           />
         );
       case "pending-payments":
-        return <PendingPaymentsPage onBack={() => setActiveTab("dashboard")} />;
+        router.push("/pending-payments");
+        return null;
       default:
         return null;
     }
@@ -1344,7 +1361,7 @@ function SupermarketProfilePage({
           .map((sale, index) => (
             <div
               key={sale.id}
-              className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm transition-all duration-300 cursor-pointer hover:shadow-md animate-in slide-in-from-bottom duration-300 ${
+              className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm transition-all duration-300 cursor-pointer hover:shadow-md animate-in slide-in-from-bottom ${
                 !sale.isPaid ? "border-red-200" : "border-green-200"
               }`}
               style={{ animationDelay: `${index * 50}ms` }}
@@ -1640,11 +1657,11 @@ function SupermarketProfilePage({
   );
 }
 
-function StockPage({ onBack }) {
-  const [showAdjustForm, setShowAdjustForm] = useState(false);
-  const [newStock, setNewStock] = useState({ cartons: 0 });
-  const [stockHistory, setStockHistory] = useState<any[]>([]);
-  const [currentStock, setCurrentStock] = useState(0);
+function StockPage({ onBack }: StockPageProps) {
+  const [showAdjustForm, setShowAdjustForm] = useState<boolean>(false);
+  const [newStock, setNewStock] = useState<{ cartons: number }>({ cartons: 0 });
+  const [stockHistory, setStockHistory] = useState<StockHistoryItem[]>([]);
+  const [currentStock, setCurrentStock] = useState<number>(0);
 
   // Load initial data
   useEffect(() => {
@@ -1652,7 +1669,7 @@ function StockPage({ onBack }) {
     setCurrentStock(getCurrentStock());
   }, []);
 
-  const handleAdjustStock = (e: React.FormEvent) => {
+  const handleAdjustStock = (e: React.FormEvent): void => {
     e.preventDefault();
     const difference = newStock.cartons - currentStock;
     updateStock(difference, "adjusted", "Ajustement manuel");
@@ -1808,9 +1825,9 @@ function StockPage({ onBack }) {
                     {new Date(item.date).toLocaleDateString("fr-FR")}
                   </h3>
                   <p className="text-sm text-gray-500 mt-1">
-                    {item.type === "adjusted"
+                    {"type" in item && item.type === "adjusted"
                       ? "Ajustement"
-                      : item.type === "removed"
+                      : "type" in item && item.type === "removed"
                       ? "Vente"
                       : "Livraison"}
                   </p>
@@ -1829,7 +1846,7 @@ function StockPage({ onBack }) {
                     {item.quantity} cartons
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Stock: {item.currentStock} cartons
+                    Stock: {item.quantity + getCurrentStock()} cartons
                   </p>
                 </div>
               </div>
@@ -1840,13 +1857,22 @@ function StockPage({ onBack }) {
   );
 }
 
+interface NewOrder {
+  date: string;
+  supermarketId: string;
+  quantity: number;
+  cartons: number;
+  priceOption: "option1" | "option2";
+}
+
 function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
-  const [showForm, setShowForm] = useState(false);
-  const [newOrder, setNewOrder] = useState({
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const [newOrder, setNewOrder] = useState<NewOrder>({
     date: "",
     supermarketId: "",
     quantity: 0,
     cartons: 0,
+    priceOption: "option1",
   });
   const [orders, setOrders] = useState<Order[]>([]);
 
@@ -1854,7 +1880,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
     setOrders(getOrders());
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
     const selectedSupermarket = getSupermarkets().find(
       (s) => s.id === newOrder.supermarketId
@@ -1862,10 +1888,13 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
 
     if (selectedSupermarket) {
       const unitsQuantity = newOrder.cartons * 9; // Convert cartons to units
-      const order = {
-        ...newOrder,
-        quantity: unitsQuantity, // Store the units for compatibility
+      const pricePerUnit = newOrder.priceOption === "option1" ? 180 : 166;
+      const order: Omit<Order, "id" | "status"> = {
+        date: newOrder.date,
+        supermarketId: newOrder.supermarketId,
         supermarketName: selectedSupermarket.name,
+        quantity: unitsQuantity,
+        pricePerUnit,
       };
 
       addOrder(order);
@@ -1874,7 +1903,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string): void => {
     deleteOrder(id);
     // Reload the page to refresh all data
     window.location.reload();
@@ -1994,6 +2023,68 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Option de Prix
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  variant={
+                    newOrder.priceOption === "option1" ? "default" : "outline"
+                  }
+                  className={`w-full rounded-xl py-3 px-4 h-auto ${
+                    newOrder.priceOption === "option1"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
+                      : "bg-white hover:bg-gray-50 border-gray-200"
+                  }`}
+                  onClick={() =>
+                    setNewOrder((prev) => ({ ...prev, priceOption: "option1" }))
+                  }
+                >
+                  <div className="text-left">
+                    <div className="font-medium text-base">180 DZD</div>
+                    <div
+                      className={`text-xs ${
+                        newOrder.priceOption === "option1"
+                          ? "text-blue-100"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      Bénéfice: 25 DZD/unité
+                    </div>
+                  </div>
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    newOrder.priceOption === "option2" ? "default" : "outline"
+                  }
+                  className={`w-full rounded-xl py-3 px-4 h-auto ${
+                    newOrder.priceOption === "option2"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
+                      : "bg-white hover:bg-gray-50 border-gray-200"
+                  }`}
+                  onClick={() =>
+                    setNewOrder((prev) => ({ ...prev, priceOption: "option2" }))
+                  }
+                >
+                  <div className="text-left">
+                    <div className="font-medium text-base">166 DZD</div>
+                    <div
+                      className={`text-xs ${
+                        newOrder.priceOption === "option2"
+                          ? "text-blue-100"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      Bénéfice: 17 DZD/unité
+                    </div>
+                  </div>
+                </Button>
+              </div>
+            </div>
+
             <div className="flex space-x-3 pt-2">
               <Button
                 type="submit"
@@ -2078,270 +2169,10 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
   );
 }
 
-function PendingPaymentsPage({ onBack }: PendingPaymentsPageProps) {
-  const [pendingSales, setPendingSales] = useState<Sale[]>([]);
-  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState(0);
-  const [paymentNote, setPaymentNote] = useState("");
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-
-  useEffect(() => {
-    const salesData = localStorage.getItem("soap_sales");
-    if (salesData) {
-      try {
-        const allSales = JSON.parse(salesData);
-        const unpaidSales = allSales.filter((sale: Sale) => !sale.isPaid);
-        setPendingSales(unpaidSales);
-      } catch (error) {
-        console.error("Error loading sales:", error);
-        setPendingSales([]);
-      }
-    }
-  }, []);
-
-  // Calculate total remaining amount safely
-  const totalRemaining = pendingSales.reduce(
-    (acc, sale) => acc + (sale.remainingAmount || 0),
-    0
-  );
-
-  const handleAddPayment = (sale: Sale) => {
-    setSelectedSale(sale);
-    setPaymentAmount(sale.remainingAmount);
-    setShowPaymentModal(true);
-  };
-
-  const handleSubmitPayment = () => {
-    if (!selectedSale || paymentAmount <= 0) return;
-
-    const payment = {
-      date: new Date().toISOString(),
-      amount: paymentAmount,
-      note: paymentNote,
-    };
-
-    addPayment(selectedSale.id, payment);
-
-    // Reload the page to refresh all data
-    window.location.reload();
-  };
-
-  return (
-    <div className="space-y-4 pb-20">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" onClick={onBack} className="mr-1">
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-bold text-gray-800">
-            Paiements en Attente
-          </h1>
-        </div>
-      </div>
-
-      {/* Summary Card */}
-      <Card className="border-none shadow-md rounded-xl overflow-hidden mb-4">
-        <CardContent className="p-5">
-          <div className="flex items-center">
-            <div className="bg-red-100 rounded-full p-3 mr-4">
-              <AlertCircle className="h-6 w-6 text-red-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total à recevoir</p>
-              <div className="text-2xl font-bold text-gray-800">
-                {totalRemaining.toLocaleString("fr-DZ")} DZD
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pending Payments List */}
-      <div className="space-y-3">
-        {pendingSales.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">
-            <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-            <p>Aucun paiement en attente</p>
-          </div>
-        ) : (
-          pendingSales.map((sale) => {
-            const remainingAmount = sale.remainingAmount || 0;
-            const totalValue = sale.totalValue || 0;
-            const supermarket = getSupermarkets().find(
-              (sm) => sm.id === sale.supermarketId
-            );
-
-            return (
-              <div
-                key={sale.id}
-                className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
-              >
-                <div className="p-4 border-b border-gray-100">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-medium text-gray-800">
-                        {supermarket ? supermarket.name : "Supermarché"}
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Livré le{" "}
-                        {new Date(sale.date).toLocaleDateString("fr-FR")}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full border-blue-200 hover:bg-blue-50 text-blue-600"
-                      onClick={() => handleAddPayment(sale)}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Versement
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-gray-50">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-500">Montant total:</span>
-                    <span className="font-medium text-gray-800">
-                      {totalValue.toLocaleString("fr-DZ")} DZD
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Reste à payer:</span>
-                    <span className="font-medium text-red-600">
-                      {remainingAmount.toLocaleString("fr-DZ")} DZD
-                    </span>
-                  </div>
-                </div>
-
-                {/* Payment History */}
-                {sale.payments && sale.payments.length > 0 && (
-                  <div className="border-t border-gray-100 p-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">
-                      Historique des versements:
-                    </p>
-                    <div className="space-y-2">
-                      {sale.payments.map((payment) => (
-                        <div
-                          key={payment.id}
-                          className="text-sm bg-gray-50 p-3 rounded-xl"
-                        >
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">
-                              {new Date(payment.date).toLocaleDateString(
-                                "fr-FR"
-                              )}
-                            </span>
-                            <span className="font-medium text-green-600">
-                              {payment.amount.toLocaleString("fr-DZ")} DZD
-                            </span>
-                          </div>
-                          {payment.note && (
-                            <p className="text-gray-500 mt-1 pt-1 border-t border-gray-100">
-                              {payment.note}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Payment Modal */}
-      {showPaymentModal && selectedSale && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-          onClick={() => {
-            setShowPaymentModal(false);
-            setSelectedSale(null);
-            setPaymentAmount(0);
-            setPaymentNote("");
-          }}
-        >
-          <div
-            className="bg-white p-5 rounded-2xl w-full max-w-md mx-auto shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold text-gray-800">
-                Ajouter un versement
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full h-8 w-8 hover:bg-gray-100"
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setSelectedSale(null);
-                  setPaymentAmount(0);
-                  setPaymentNote("");
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Montant</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border mt-1 p-2"
-                  value={paymentAmount}
-                  onChange={(e) =>
-                    setPaymentAmount(Math.max(0, Number(e.target.value)))
-                  }
-                  max={selectedSale.remainingAmount}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Note</label>
-                <textarea
-                  className="w-full rounded-md border mt-1 p-2"
-                  value={paymentNote}
-                  onChange={(e) => setPaymentNote(e.target.value)}
-                  placeholder="Détails du versement..."
-                />
-              </div>
-
-              <div className="flex space-x-2">
-                <Button
-                  className="flex-1"
-                  onClick={handleSubmitPayment}
-                  disabled={
-                    paymentAmount <= 0 ||
-                    paymentAmount > (selectedSale.remainingAmount || 0)
-                  }
-                >
-                  Confirmer
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setShowPaymentModal(false)}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ClearDataButton() {
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState<boolean>(false);
 
-  const handleClearData = () => {
+  const handleClearData = (): void => {
     localStorage.clear();
     window.location.reload(); // Reload the page to reset all states
   };
@@ -2363,7 +2194,7 @@ function ClearDataButton() {
         >
           <div
             className="bg-white p-5 rounded-2xl w-full max-w-md mx-auto shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
           >
             <div className="text-center mb-4">
               <div className="bg-red-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">

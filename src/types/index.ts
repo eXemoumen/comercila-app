@@ -45,5 +45,7 @@ export interface Order {
   supermarketId: string;
   supermarketName: string;
   quantity: number;
-  status: 'pending' | 'completed' | 'cancelled';
+  pricePerUnit: number;
+  status: 'pending' | 'completed';
+  completedDate?: string;
 } 
