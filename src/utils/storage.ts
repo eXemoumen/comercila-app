@@ -32,6 +32,7 @@ interface Stock {
   type: 'added' | 'removed' | 'adjusted';
   quantity: number;
   currentStock: number;
+  reason: string;
 }
 
 interface Order {
@@ -141,7 +142,8 @@ export const updateStock = (quantity: number, type: Stock['type'], reason: strin
     date: new Date().toISOString(),
     type,
     quantity,
-    currentStock: newStock
+    currentStock: newStock,
+    reason
   });
   localStorage.setItem(STOCK_KEY, JSON.stringify(stockHistory));
   
