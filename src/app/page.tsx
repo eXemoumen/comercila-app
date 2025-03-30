@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { InvoiceModal } from "@/components/InvoiceModal";
 
 import {
   Calendar,
@@ -18,6 +19,7 @@ import {
   Minus,
   AlertCircle,
   X,
+  Menu,
 } from "lucide-react";
 import {
   BarChart,
@@ -83,9 +85,17 @@ interface StockHistoryItem {
   reason?: string;
 }
 
+// Add this interface near the top with other interfaces
+interface MonthlyData {
+  quantity: number;
+  value: number;
+  netBenefit: number;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [showMenu, setShowMenu] = useState(false);
   const [selectedSupermarketId, setSelectedSupermarketId] =
     useState<string>("");
   const [preFillSaleData, setPreFillSaleData] = useState<{
@@ -103,6 +113,11 @@ export default function Dashboard() {
     },
     salesData: [] as { name: string; value: number }[],
   });
+
+  // Add this calculation in the Dashboard component, after the dashboardData state
+  const [monthlyBenefits, setMonthlyBenefits] = useState<
+    Record<string, MonthlyData>
+  >({});
 
   // Load and update dashboard data
   useEffect(() => {
@@ -193,6 +208,41 @@ export default function Dashboard() {
 
     // Cleanup interval on unmount
     return () => clearInterval(interval);
+  }, []);
+
+  // Add this useEffect after the existing dashboard data useEffect
+  useEffect(() => {
+    const calculateMonthlyBenefits = () => {
+      const allSales = getSales();
+      const monthlyData: Record<string, MonthlyData> = {};
+
+      allSales.forEach((sale) => {
+        const date = new Date(sale.date);
+        const monthYear = date.toLocaleDateString("fr-FR", {
+          month: "long",
+          year: "numeric",
+        });
+
+        if (!monthlyData[monthYear]) {
+          monthlyData[monthYear] = {
+            quantity: 0,
+            value: 0,
+            netBenefit: 0,
+          };
+        }
+
+        const benefitPerUnit =
+          sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
+
+        monthlyData[monthYear].quantity += sale.quantity;
+        monthlyData[monthYear].value += sale.totalValue;
+        monthlyData[monthYear].netBenefit += sale.quantity * benefitPerUnit;
+      });
+
+      setMonthlyBenefits(monthlyData);
+    };
+
+    calculateMonthlyBenefits();
   }, []);
 
   const renderContent = () => {
@@ -432,7 +482,69 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Monthly History Table */}
+            <Card className="border-none shadow-md rounded-xl overflow-hidden mt-6">
+              <div className="p-3 border-b">
+                <CardTitle className="text-sm font-medium text-gray-700">
+                  Historique Mensuel
+                </CardTitle>
+              </div>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Mois
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ventes
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Bénéfice
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Retour Fournisseur
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {Object.entries(monthlyBenefits)
+                        .sort(
+                          (a, b) =>
+                            new Date(b[0]).getTime() - new Date(a[0]).getTime()
+                        )
+                        .map(([month, data]) => {
+                          // Calculate supplier return based on price
+                          const supplierReturn =
+                            data.quantity *
+                            (data.value / data.quantity === 180 ? 155 : 166);
+
+                          return (
+                            <tr key={month} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {month}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                {data.quantity} pièces
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-green-600">
+                                {data.netBenefit.toLocaleString("fr-DZ")} DZD
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-red-600">
+                                {supplierReturn.toLocaleString("fr-DZ")} DZD
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-4 mt-4">
               <Button
                 size="lg"
                 className="h-14 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-md rounded-xl"
@@ -522,116 +634,137 @@ export default function Dashboard() {
 
   return (
     <main className="container max-w-md mx-auto p-4 bg-gradient-to-b from-gray-50 to-white min-h-screen">
-      {renderContent()}
-      <ClearDataButton />
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white backdrop-blur-lg bg-opacity-80 border-t flex justify-around items-center h-16 px-2 shadow-lg z-50">
+      {/* Top Navigation */}
+      <div className="fixed top-0 left-0 right-0 bg-white backdrop-blur-lg bg-opacity-80 border-b flex justify-between items-center h-16 px-4 shadow-lg z-50">
         <Button
           variant={activeTab === "dashboard" ? "default" : "ghost"}
-          className="flex flex-col h-14 rounded-none relative transition-all duration-200"
+          className="flex items-center h-14 rounded-xl relative transition-all duration-200"
           onClick={() => setActiveTab("dashboard")}
         >
           <Home
             className={`h-5 w-5 transition-colors duration-200 ${
-              activeTab === "dashboard" ? "text-primary" : "text-gray-500"
+              activeTab === "dashboard" ? "text-white" : "text-gray-500"
             }`}
           />
           <span
-            className={`text-xs mt-1 transition-colors duration-200 ${
-              activeTab === "dashboard" ? "font-medium" : "text-gray-500"
+            className={`ml-2 transition-colors duration-200 ${
+              activeTab === "dashboard"
+                ? "text-white font-medium"
+                : "text-gray-500"
             }`}
           >
             Tableau de Bord
           </span>
-          {activeTab === "dashboard" && (
-            <div className="absolute -bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md animate-pulse" />
-          )}
         </Button>
+
         <Button
-          variant={activeTab === "add-sale" ? "default" : "ghost"}
-          className="flex flex-col h-14 rounded-none relative transition-all duration-200"
-          onClick={() => setActiveTab("add-sale")}
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 rounded-full"
+          onClick={() => setShowMenu(!showMenu)}
         >
-          <ShoppingCart
-            className={`h-5 w-5 transition-colors duration-200 ${
-              activeTab === "add-sale" ? "text-primary" : "text-gray-500"
-            }`}
-          />
-          <span
-            className={`text-xs mt-1 transition-colors duration-200 ${
-              activeTab === "add-sale" ? "font-medium" : "text-gray-500"
-            }`}
-          >
-            Ventes
-          </span>
-          {activeTab === "add-sale" && (
-            <div className="absolute -bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md animate-pulse" />
-          )}
-        </Button>
-        <Button
-          variant={activeTab === "supermarkets" ? "default" : "ghost"}
-          className="flex flex-col h-14 rounded-none relative transition-all duration-200"
-          onClick={() => setActiveTab("supermarkets")}
-        >
-          <Store
-            className={`h-5 w-5 transition-colors duration-200 ${
-              activeTab === "supermarkets" ? "text-primary" : "text-gray-500"
-            }`}
-          />
-          <span
-            className={`text-xs mt-1 transition-colors duration-200 ${
-              activeTab === "supermarkets" ? "font-medium" : "text-gray-500"
-            }`}
-          >
-            Supermarchés
-          </span>
-          {activeTab === "supermarkets" && (
-            <div className="absolute -bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md animate-pulse" />
-          )}
-        </Button>
-        <Button
-          variant={activeTab === "stock" ? "default" : "ghost"}
-          className="flex flex-col h-14 rounded-none relative transition-all duration-200"
-          onClick={() => setActiveTab("stock")}
-        >
-          <Package
-            className={`h-5 w-5 transition-colors duration-200 ${
-              activeTab === "stock" ? "text-primary" : "text-gray-500"
-            }`}
-          />
-          <span
-            className={`text-xs mt-1 transition-colors duration-200 ${
-              activeTab === "stock" ? "font-medium" : "text-gray-500"
-            }`}
-          >
-            Stock
-          </span>
-          {activeTab === "stock" && (
-            <div className="absolute -bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md animate-pulse" />
-          )}
-        </Button>
-        <Button
-          variant={activeTab === "orders" ? "default" : "ghost"}
-          className="flex flex-col h-14 rounded-none relative transition-all duration-200"
-          onClick={() => setActiveTab("orders")}
-        >
-          <Calendar
-            className={`h-5 w-5 transition-colors duration-200 ${
-              activeTab === "orders" ? "text-primary" : "text-gray-500"
-            }`}
-          />
-          <span
-            className={`text-xs mt-1 transition-colors duration-200 ${
-              activeTab === "orders" ? "font-medium" : "text-gray-500"
-            }`}
-          >
-            Commandes
-          </span>
-          {activeTab === "orders" && (
-            <div className="absolute -bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md animate-pulse" />
-          )}
+          <Menu className="h-5 w-5 text-gray-500" />
         </Button>
       </div>
+
+      {/* Hamburger Menu */}
+      {showMenu && (
+        <div className="fixed top-16 left-0 right-0 bg-white border-b shadow-lg z-40">
+          <div className="p-4 space-y-2">
+            <Button
+              variant={activeTab === "add-sale" ? "default" : "ghost"}
+              className="w-full justify-start h-12 rounded-xl"
+              onClick={() => {
+                setActiveTab("add-sale");
+                setShowMenu(false);
+              }}
+            >
+              <ShoppingCart
+                className={`h-5 w-5 mr-2 ${
+                  activeTab === "add-sale" ? "text-white" : "text-gray-500"
+                }`}
+              />
+              <span
+                className={
+                  activeTab === "add-sale" ? "text-white" : "text-gray-500"
+                }
+              >
+                Ventes
+              </span>
+            </Button>
+
+            <Button
+              variant={activeTab === "supermarkets" ? "default" : "ghost"}
+              className="w-full justify-start h-12 rounded-xl"
+              onClick={() => {
+                setActiveTab("supermarkets");
+                setShowMenu(false);
+              }}
+            >
+              <Store
+                className={`h-5 w-5 mr-2 ${
+                  activeTab === "supermarkets" ? "text-white" : "text-gray-500"
+                }`}
+              />
+              <span
+                className={
+                  activeTab === "supermarkets" ? "text-white" : "text-gray-500"
+                }
+              >
+                Supermarchés
+              </span>
+            </Button>
+
+            <Button
+              variant={activeTab === "stock" ? "default" : "ghost"}
+              className="w-full justify-start h-12 rounded-xl"
+              onClick={() => {
+                setActiveTab("stock");
+                setShowMenu(false);
+              }}
+            >
+              <Package
+                className={`h-5 w-5 mr-2 ${
+                  activeTab === "stock" ? "text-white" : "text-gray-500"
+                }`}
+              />
+              <span
+                className={
+                  activeTab === "stock" ? "text-white" : "text-gray-500"
+                }
+              >
+                Stock
+              </span>
+            </Button>
+
+            <Button
+              variant={activeTab === "orders" ? "default" : "ghost"}
+              className="w-full justify-start h-12 rounded-xl"
+              onClick={() => {
+                setActiveTab("orders");
+                setShowMenu(false);
+              }}
+            >
+              <Calendar
+                className={`h-5 w-5 mr-2 ${
+                  activeTab === "orders" ? "text-white" : "text-gray-500"
+                }`}
+              />
+              <span
+                className={
+                  activeTab === "orders" ? "text-white" : "text-gray-500"
+                }
+              >
+                Commandes
+              </span>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Add padding to account for fixed top navigation */}
+      <div className="pt-20">{renderContent()}</div>
+      <ClearDataButton />
     </main>
   );
 }
@@ -1125,6 +1258,7 @@ function SupermarketProfilePage({
   const [salesHistory, setSalesHistory] = useState<Sale[]>([]);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [showSaleModal, setShowSaleModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState("");
 
@@ -1401,19 +1535,49 @@ function SupermarketProfilePage({
                     {sale.quantity} pièces ({sale.cartons} cartons)
                   </p>
                 </div>
-                {!sale.isPaid && (
+                <div className="flex gap-1">
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="ml-2"
+                    size="icon"
+                    className="h-8 w-8 text-blue-600 rounded-full border-blue-200 hover:bg-blue-50"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handlePaymentUpdate(sale.id, true);
+                      setSelectedSale(sale);
+                      setShowInvoiceModal(true);
                     }}
+                    title="Voir la facture"
                   >
-                    <Check className="h-4 w-4" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
                   </Button>
-                )}
+                  {!sale.isPaid && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="ml-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePaymentUpdate(sale.id, true);
+                      }}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -1638,19 +1802,54 @@ function SupermarketProfilePage({
         </div>
       )}
 
+      {/* Invoice Modal */}
+      {showInvoiceModal && selectedSale && supermarket && (
+        <InvoiceModal
+          sale={selectedSale}
+          supermarketName={supermarket.name}
+          onClose={() => {
+            setShowInvoiceModal(false);
+            setSelectedSale(null);
+          }}
+        />
+      )}
+
       {/* Action Buttons */}
-      <div className="flex space-x-2 mt-4">
-        <Button className="flex-1" onClick={() => setActiveTab("add-sale")}>
-          <ShoppingCart className="mr-2 h-4 w-4" />
+      <div className="grid grid-cols-2 gap-4 mt-4">
+        <Button
+          size="lg"
+          className="h-14 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-md rounded-xl"
+          onClick={() => setActiveTab("add-sale")}
+        >
+          <ShoppingCart className="mr-2 h-5 w-5" />
           Nouvelle Vente
         </Button>
         <Button
+          size="lg"
           variant="outline"
-          className="flex-1"
+          className="h-14 text-base font-medium border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 shadow-sm rounded-xl"
+          onClick={() => setActiveTab("stock")}
+        >
+          <Package className="mr-2 h-5 w-5" />
+          Voir Stock
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          className="h-14 text-base font-medium border-green-200 text-green-700 bg-green-50 hover:bg-green-100 shadow-sm rounded-xl"
           onClick={() => setActiveTab("orders")}
         >
-          <Calendar className="mr-2 h-4 w-4" />
-          Planifier Commande
+          <Calendar className="mr-2 h-5 w-5" />
+          Planifier
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          className="h-14 text-base font-medium border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 shadow-sm rounded-xl"
+          onClick={() => setActiveTab("supermarkets")}
+        >
+          <Store className="mr-2 h-5 w-5" />
+          Supermarchés
         </Button>
       </div>
     </div>
