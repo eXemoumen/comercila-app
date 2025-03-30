@@ -74,6 +74,10 @@ export const addSale = (saleData: Omit<Sale, 'id'>) => {
   };
   sales.push(newSale);
   localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+  
+  // Update supermarket stats
+  updateSupermarketStats(saleData.supermarketId, saleData.quantity, saleData.totalValue);
+  
   return newSale;
 };
 
@@ -84,12 +88,13 @@ export const getSupermarkets = (): Supermarket[] => {
   return supermarkets ? JSON.parse(supermarkets) : [];
 };
 
-export const updateSupermarketStats = (id: string, quantity: number) => {
+export const updateSupermarketStats = (id: string, quantity: number, totalValue: number) => {
   if (typeof window === 'undefined') return;
   const supermarkets = getSupermarkets();
   const index = supermarkets.findIndex(s => s.id === id);
   if (index !== -1) {
     supermarkets[index].totalSales += quantity;
+    supermarkets[index].totalValue += totalValue;
     localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
   }
 };
@@ -186,7 +191,7 @@ export const completeOrder = (orderId: string) => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
     
     // Update supermarket stats when order is completed
-    updateSupermarketStats(order.supermarketId, order.quantity);
+    updateSupermarketStats(order.supermarketId, order.quantity, order.quantity * order.pricePerUnit);
     
     return orders[orderIndex];
   }
