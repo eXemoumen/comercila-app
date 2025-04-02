@@ -24,6 +24,11 @@ interface Supermarket {
   email: string;
   totalSales: number;
   totalValue: number;
+  location: {
+    lat: number;
+    lng: number;
+    formattedAddress: string;
+  };
 }
 
 interface Stock {
@@ -107,7 +112,12 @@ export const addSupermarket = (supermarket: Omit<Supermarket, 'id' | 'totalSales
     ...supermarket,
     id: Date.now().toString(),
     totalSales: 0,
-    totalValue: 0
+    totalValue: 0,
+    location: supermarket.location || {
+      lat: 36.7538, // Default to Algiers coordinates
+      lng: 3.0588,
+      formattedAddress: supermarket.address
+    }
   };
   supermarkets.push(newSupermarket);
   localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
@@ -243,4 +253,64 @@ export const addPayment = (saleId: string, payment: Omit<Payment, 'id'>) => {
     return sales[saleIndex];
   }
   return null;
+};
+
+// Migration function to add location data to existing supermarkets
+export const migrateSupermarkets = async () => {
+  if (typeof window === 'undefined') return;
+  const supermarkets = getSupermarkets();
+  let hasChanges = false;
+
+  for (const supermarket of supermarkets) {
+    if (!supermarket.location) {
+      try {
+        console.log(`Migrating supermarket: ${supermarket.name}`);
+        // Geocode the address
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(supermarket.address)}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log(`Geocoding response for ${supermarket.name}:`, data);
+
+        if (data && data.length > 0) {
+          supermarket.location = {
+            lat: parseFloat(data[0].lat),
+            lng: parseFloat(data[0].lon),
+            formattedAddress: data[0].display_name
+          };
+          hasChanges = true;
+          console.log(`Added location to ${supermarket.name}:`, supermarket.location);
+        } else {
+          // Set default location if geocoding fails
+          supermarket.location = {
+            lat: 36.7538,
+            lng: 3.0588,
+            formattedAddress: supermarket.address
+          };
+          hasChanges = true;
+          console.log(`Added default location to ${supermarket.name}:`, supermarket.location);
+        }
+      } catch (error) {
+        console.error(`Error geocoding address for ${supermarket.name}:`, error);
+        // Set default location if geocoding fails
+        supermarket.location = {
+          lat: 36.7538,
+          lng: 3.0588,
+          formattedAddress: supermarket.address
+        };
+        hasChanges = true;
+        console.log(`Added default location to ${supermarket.name} after error:`, supermarket.location);
+      }
+    }
+  }
+
+  if (hasChanges) {
+    console.log("Saving updated supermarkets:", supermarkets);
+    localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
+  }
 }; 

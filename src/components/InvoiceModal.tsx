@@ -1,6 +1,6 @@
 "use client";
 
-import { Sale } from "@/types";
+import type { Sale } from "../types/index";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 

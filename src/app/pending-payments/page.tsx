@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, ChevronLeft, Plus, X } from "lucide-react";
-import { Sale, Payment } from "@/types";
+import type { Sale, Payment } from "@/types/index";
 import { getSupermarkets, addPayment } from "@/utils/storage";
 
 export default function PendingPaymentsPage() {

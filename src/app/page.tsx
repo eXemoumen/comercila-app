@@ -20,6 +20,7 @@ import {
   AlertCircle,
   X,
   Menu,
+  MapPin,
 } from "lucide-react";
 import {
   BarChart,
@@ -46,7 +47,7 @@ import {
   updateSalePayment,
   addPayment,
 } from "@/utils/storage";
-import { Sale, Supermarket, Order } from "@/types";
+import { Sale, Supermarket, Order } from "@/types/index";
 
 interface SupermarketsPageProps {
   onBack: () => void;
@@ -524,24 +525,20 @@ export default function Dashboard() {
                             new Date(b[0]).getTime() - new Date(a[0]).getTime()
                         )
                         .map(([month, data]) => {
-                          // Calculate supplier return based on price
-                          const supplierReturn =
-                            data.quantity *
-                            (data.value / data.quantity === 180 ? 155 : 166);
-
+                          const typedData = data as { quantity: number; value: number; netBenefit: number };
                           return (
-                            <tr key={month} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm text-gray-900">
-                                {month}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-right text-gray-900">
-                                {data.quantity} pièces
-                              </td>
-                              <td className="px-4 py-3 text-sm text-right text-green-600">
-                                {data.netBenefit.toLocaleString("fr-DZ")} DZD
-                              </td>
-                              <td className="px-4 py-3 text-sm text-right text-red-600">
-                                {supplierReturn.toLocaleString("fr-DZ")} DZD
+                            <tr key={month} className="border-b last:border-0">
+                              <td className="py-4">
+                                <div className="flex justify-between items-center">
+                                  <p className="font-medium">{month}</p>
+                                  <p className="text-green-600">
+                                    {typedData.netBenefit.toLocaleString("fr-DZ")} DZD
+                                  </p>
+                                </div>
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  {typedData.quantity} pièces ({Math.floor(typedData.quantity / 9)}{" "}
+                                  cartons)
+                                </div>
                               </td>
                             </tr>
                           );
@@ -584,10 +581,10 @@ export default function Dashboard() {
                 size="lg"
                 variant="outline"
                 className="h-14 text-base font-medium border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 shadow-sm rounded-xl"
-                onClick={() => setActiveTab("supermarkets")}
+                onClick={() => router.push("/find-supermarkets")}
               >
-                <Store className="mr-2 h-5 w-5" />
-                Supermarchés
+                <MapPin className="mr-2 h-5 w-5" />
+                Trouver
               </Button>
             </div>
           </div>
@@ -765,6 +762,24 @@ export default function Dashboard() {
                 }
               >
                 Commandes
+              </span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              className="w-full justify-start h-12 rounded-xl"
+              onClick={() => {
+                setShowMenu(false);
+                setTimeout(() => {
+                  router.push("/find-supermarkets");
+                }, 0);
+              }}
+            >
+              <MapPin
+                className="h-5 w-5 mr-2 text-gray-500"
+              />
+              <span className="text-gray-500">
+                Trouve
               </span>
             </Button>
           </div>
@@ -1089,15 +1104,19 @@ function SupermarketsPage({
   onViewSupermarket,
 }: SupermarketsPageProps) {
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newSupermarket, setNewSupermarket] = useState<
-    Omit<Supermarket, "id" | "totalSales" | "totalValue">
-  >({
+  const [newSupermarket, setNewSupermarket] = useState({
     name: "",
     address: "",
     phone: "",
     email: "",
+    location: {
+      lat: 36.7538,
+      lng: 3.0588,
+      formattedAddress: ""
+    }
   });
   const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Load supermarkets on component mount
   useEffect(() => {
@@ -1105,11 +1124,48 @@ function SupermarketsPage({
     setSupermarkets(loadedSupermarkets);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addSupermarket(newSupermarket);
-    // Reload the page instead of just refreshing state
-    window.location.reload();
+    setLoading(true);
+
+    try {
+      // Geocode the address
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(newSupermarket.address)}`
+      );
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        const location = {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon),
+          formattedAddress: data[0].display_name
+        };
+
+        const supermarketWithLocation = {
+          ...newSupermarket,
+          location
+        };
+
+        addSupermarket(supermarketWithLocation);
+        setShowAddForm(false);
+        setNewSupermarket({
+          name: "",
+          address: "",
+          phone: "",
+          email: "",
+          location: {
+            lat: 36.7538,
+            lng: 3.0588,
+            formattedAddress: ""
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error geocoding address:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1168,6 +1224,7 @@ function SupermarketsPage({
                   }))
                 }
                 required
+                placeholder="Adresse complète du supermarché"
               />
             </div>
 
@@ -1189,11 +1246,13 @@ function SupermarketsPage({
               />
             </div>
 
-            <div>
-              <label className="text-sm font-medium block mb-1">Email</label>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Email
+              </label>
               <input
                 type="email"
-                className="w-full h-10 rounded-md border bg-background px-3"
+                className="w-full h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
                 value={newSupermarket.email}
                 onChange={(e) =>
                   setNewSupermarket((prev) => ({
@@ -1206,8 +1265,12 @@ function SupermarketsPage({
             </div>
 
             <div className="flex space-x-2 pt-2">
-              <Button type="submit" className="flex-1">
-                Confirmer
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={loading}
+              >
+                {loading ? "Ajout en cours..." : "Confirmer"}
               </Button>
               <Button
                 type="button"
@@ -1241,7 +1304,7 @@ function SupermarketsPage({
                   {supermarket.totalValue.toLocaleString("fr-DZ")} DZD
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {supermarket.address}
+                  {supermarket.location.formattedAddress}
                 </p>
               </div>
               <div className="text-right">
@@ -1263,6 +1326,7 @@ function SupermarketProfilePage({
   supermarketId,
   setActiveTab,
 }: SupermarketProfilePageProps) {
+  const router = useRouter();
   const [supermarket, setSupermarket] = useState<Supermarket | null>(null);
   const [salesHistory, setSalesHistory] = useState<Sale[]>([]);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -1329,7 +1393,6 @@ function SupermarketProfilePage({
       };
     }
 
-    // Use correct benefit calculation based on actual price
     const benefitPerUnit =
       sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
 
@@ -1419,23 +1482,26 @@ function SupermarketProfilePage({
               .sort(
                 (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
               )
-              .map(([month, data]) => (
-                <div
-                  key={month}
-                  className="border-b last:border-0 pb-4 last:pb-0"
-                >
-                  <div className="flex justify-between items-center">
-                    <p className="font-medium">{month}</p>
-                    <p className="text-green-600">
-                      {data.netBenefit.toLocaleString("fr-DZ")} DZD
-                    </p>
+              .map(([month, data]) => {
+                const typedData = data as { quantity: number; value: number; netBenefit: number };
+                return (
+                  <div
+                    key={month}
+                    className="border-b last:border-0 pb-4 last:pb-0"
+                  >
+                    <div className="flex justify-between items-center">
+                      <p className="font-medium">{month}</p>
+                      <p className="text-green-600">
+                        {typedData.netBenefit.toLocaleString("fr-DZ")} DZD
+                      </p>
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {typedData.quantity} pièces ({Math.floor(typedData.quantity / 9)}{" "}
+                      cartons)
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {data.quantity} pièces ({Math.floor(data.quantity / 9)}{" "}
-                    cartons)
-                  </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </CardContent>
       </Card>
@@ -1708,7 +1774,7 @@ function SupermarketProfilePage({
                     Historique des versements
                   </p>
                   <div className="space-y-2">
-                    {selectedSale.payments.map((payment) => (
+                    {selectedSale.payments.map((payment: { id: string; date: string; amount: number; note?: string }) => (
                       <div
                         key={payment.id}
                         className="bg-gray-50 p-3 rounded-xl"
@@ -1855,10 +1921,10 @@ function SupermarketProfilePage({
           size="lg"
           variant="outline"
           className="h-14 text-base font-medium border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 shadow-sm rounded-xl"
-          onClick={() => setActiveTab("supermarkets")}
+          onClick={() => router.push("/find-supermarkets")}
         >
-          <Store className="mr-2 h-5 w-5" />
-          Supermarchés
+          <MapPin className="mr-2 h-5 w-5" />
+          Trouver
         </Button>
       </div>
     </div>
@@ -2111,7 +2177,6 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
       window.location.reload();
     }
   };
-
   const handleDelete = (id: string): void => {
     deleteOrder(id);
     // Reload the page to refresh all data
@@ -2439,3 +2504,4 @@ function ClearDataButton() {
     </>
   );
 }
+

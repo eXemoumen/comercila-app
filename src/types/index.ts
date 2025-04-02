@@ -30,6 +30,11 @@ export interface Supermarket {
   email: string;
   totalSales: number;
   totalValue: number;
+  location: {
+    lat: number;
+    lng: number;
+    formattedAddress: string;
+  };
 }
 
 export interface Stock {
