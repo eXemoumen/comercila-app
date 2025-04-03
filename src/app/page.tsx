@@ -525,19 +525,26 @@ export default function Dashboard() {
                             new Date(b[0]).getTime() - new Date(a[0]).getTime()
                         )
                         .map(([month, data]) => {
-                          const typedData = data as { quantity: number; value: number; netBenefit: number };
+                          const typedData = data as {
+                            quantity: number;
+                            value: number;
+                            netBenefit: number;
+                          };
                           return (
                             <tr key={month} className="border-b last:border-0">
                               <td className="py-4">
                                 <div className="flex justify-between items-center">
                                   <p className="font-medium">{month}</p>
                                   <p className="text-green-600">
-                                    {typedData.netBenefit.toLocaleString("fr-DZ")} DZD
+                                    {typedData.netBenefit.toLocaleString(
+                                      "fr-DZ"
+                                    )}{" "}
+                                    DZD
                                   </p>
                                 </div>
                                 <div className="text-sm text-muted-foreground mt-1">
-                                  {typedData.quantity} pièces ({Math.floor(typedData.quantity / 9)}{" "}
-                                  cartons)
+                                  {typedData.quantity} pièces (
+                                  {Math.floor(typedData.quantity / 9)} cartons)
                                 </div>
                               </td>
                             </tr>
@@ -775,12 +782,8 @@ export default function Dashboard() {
                 }, 0);
               }}
             >
-              <MapPin
-                className="h-5 w-5 mr-2 text-gray-500"
-              />
-              <span className="text-gray-500">
-                Trouve
-              </span>
+              <MapPin className="h-5 w-5 mr-2 text-gray-500" />
+              <span className="text-gray-500">Trouve</span>
             </Button>
           </div>
         </div>
@@ -819,10 +822,10 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       label: "Option 1 (180 DZD)",
     },
     option2: {
-      pricePerUnit: 166,
+      pricePerUnit: 180,
       benefitPerUnit: 17,
-      costToSupplier: 149,
-      label: "Option 2 (166 DZD)",
+      costToSupplier: 163,
+      label: "Option 2 (180 DZD)",
     },
   };
 
@@ -931,10 +934,15 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
               type="number"
               className="flex-1 h-12 text-center border-x-0 border-y border-gray-200"
               value={cartons}
-              onChange={(e) =>
-                setCartons(Math.max(1, parseInt(e.target.value) || 1))
-              }
-              min="1"
+              onChange={(e) => {
+                const value =
+                  e.target.value === "" ? 0 : parseInt(e.target.value);
+                setCartons(value);
+              }}
+              onBlur={() => {
+                if (cartons < 1) setCartons(1);
+              }}
+              min="0"
               required
             />
             <Button
@@ -981,7 +989,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                       : "text-gray-500"
                   }`}
                 >
-                  Bénéfice: 25 DZD/unité
+                  Retour: 155 DZD/unité
                 </div>
               </div>
             </Button>
@@ -996,7 +1004,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
               onClick={() => setPriceOption("option2")}
             >
               <div className="text-left">
-                <div className="font-medium text-base">166 DZD</div>
+                <div className="font-medium text-base">180 DZD</div>
                 <div
                   className={`text-xs ${
                     priceOption === "option2"
@@ -1004,7 +1012,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                       : "text-gray-500"
                   }`}
                 >
-                  Bénéfice: 17 DZD/unité
+                  Retour: 163 DZD/unité
                 </div>
               </div>
             </Button>
@@ -1112,8 +1120,8 @@ function SupermarketsPage({
     location: {
       lat: 36.7538,
       lng: 3.0588,
-      formattedAddress: ""
-    }
+      formattedAddress: "",
+    },
   });
   const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1131,7 +1139,9 @@ function SupermarketsPage({
     try {
       // Geocode the address
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(newSupermarket.address)}`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          newSupermarket.address
+        )}`
       );
       const data = await response.json();
 
@@ -1139,12 +1149,14 @@ function SupermarketsPage({
         const location = {
           lat: parseFloat(data[0].lat),
           lng: parseFloat(data[0].lon),
-          formattedAddress: data[0].display_name
+          formattedAddress: data[0].display_name,
         };
 
         const supermarketWithLocation = {
           ...newSupermarket,
-          location
+          location,
+          // Only include email if it's not empty
+          email: newSupermarket.email || undefined,
         };
 
         addSupermarket(supermarketWithLocation);
@@ -1157,9 +1169,13 @@ function SupermarketsPage({
           location: {
             lat: 36.7538,
             lng: 3.0588,
-            formattedAddress: ""
-          }
+            formattedAddress: "",
+          },
         });
+
+        // Refresh the supermarkets list
+        const loadedSupermarkets = getSupermarkets();
+        setSupermarkets(loadedSupermarkets);
       }
     } catch (error) {
       console.error("Error geocoding address:", error);
@@ -1248,7 +1264,7 @@ function SupermarketsPage({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
-                Email
+                Email (Optionnel)
               </label>
               <input
                 type="email"
@@ -1260,16 +1276,12 @@ function SupermarketsPage({
                     email: e.target.value,
                   }))
                 }
-                required
+                placeholder="Entrez l'email (optionnel)"
               />
             </div>
 
             <div className="flex space-x-2 pt-2">
-              <Button
-                type="submit"
-                className="flex-1"
-                disabled={loading}
-              >
+              <Button type="submit" className="flex-1" disabled={loading}>
                 {loading ? "Ajout en cours..." : "Confirmer"}
               </Button>
               <Button
@@ -1483,7 +1495,11 @@ function SupermarketProfilePage({
                 (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
               )
               .map(([month, data]) => {
-                const typedData = data as { quantity: number; value: number; netBenefit: number };
+                const typedData = data as {
+                  quantity: number;
+                  value: number;
+                  netBenefit: number;
+                };
                 return (
                   <div
                     key={month}
@@ -1496,8 +1512,8 @@ function SupermarketProfilePage({
                       </p>
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      {typedData.quantity} pièces ({Math.floor(typedData.quantity / 9)}{" "}
-                      cartons)
+                      {typedData.quantity} pièces (
+                      {Math.floor(typedData.quantity / 9)} cartons)
                     </div>
                   </div>
                 );
@@ -1774,26 +1790,35 @@ function SupermarketProfilePage({
                     Historique des versements
                   </p>
                   <div className="space-y-2">
-                    {selectedSale.payments.map((payment: { id: string; date: string; amount: number; note?: string }) => (
-                      <div
-                        key={payment.id}
-                        className="bg-gray-50 p-3 rounded-xl"
-                      >
-                        <div className="flex justify-between">
-                          <span className="text-sm text-gray-600">
-                            {new Date(payment.date).toLocaleDateString("fr-FR")}
-                          </span>
-                          <span className="font-medium text-green-600">
-                            {payment.amount.toLocaleString("fr-DZ")} DZD
-                          </span>
+                    {selectedSale.payments.map(
+                      (payment: {
+                        id: string;
+                        date: string;
+                        amount: number;
+                        note?: string;
+                      }) => (
+                        <div
+                          key={payment.id}
+                          className="bg-gray-50 p-3 rounded-xl"
+                        >
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">
+                              {new Date(payment.date).toLocaleDateString(
+                                "fr-FR"
+                              )}
+                            </span>
+                            <span className="font-medium text-green-600">
+                              {payment.amount.toLocaleString("fr-DZ")} DZD
+                            </span>
+                          </div>
+                          {payment.note && (
+                            <p className="text-muted-foreground mt-1 border-t border-gray-100 pt-1">
+                              {payment.note}
+                            </p>
+                          )}
                         </div>
-                        {payment.note && (
-                          <p className="text-muted-foreground mt-1 border-t border-gray-100 pt-1">
-                            {payment.note}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    )}
                   </div>
                 </div>
               )}
@@ -2344,7 +2369,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
                   }
                 >
                   <div className="text-left">
-                    <div className="font-medium text-base">166 DZD</div>
+                    <div className="font-medium text-base">180 DZD</div>
                     <div
                       className={`text-xs ${
                         newOrder.priceOption === "option2"
@@ -2352,7 +2377,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
                           : "text-gray-500"
                       }`}
                     >
-                      Bénéfice: 17 DZD/unité
+                      Retour: 163 DZD/unité
                     </div>
                   </div>
                 </Button>
@@ -2504,4 +2529,3 @@ function ClearDataButton() {
     </>
   );
 }
-

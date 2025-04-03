@@ -21,7 +21,7 @@ interface Supermarket {
   name: string;
   address: string;
   phone: string;
-  email: string;
+  email?: string;
   totalSales: number;
   totalValue: number;
   location: {
@@ -80,10 +80,10 @@ export const addSale = (saleData: Omit<Sale, 'id'>) => {
   };
   sales.push(newSale);
   localStorage.setItem(SALES_KEY, JSON.stringify(sales));
-  
+
   // Update supermarket stats
   updateSupermarketStats(saleData.supermarketId, saleData.quantity, saleData.totalValue);
-  
+
   return newSale;
 };
 
@@ -114,7 +114,7 @@ export const addSupermarket = (supermarket: Omit<Supermarket, 'id' | 'totalSales
     totalSales: 0,
     totalValue: 0,
     location: supermarket.location || {
-      lat: 36.7538, // Default to Algiers coordinates
+      lat: 36.7538,
       lng: 3.0588,
       formattedAddress: supermarket.address
     }
@@ -141,10 +141,10 @@ export const updateStock = (quantity: number, type: Stock['type'], reason: strin
   if (typeof window === 'undefined') return 0;
   const currentStock = getCurrentStock();
   const newStock = currentStock + quantity;
-  
+
   // Update current stock
   localStorage.setItem(CURRENT_STOCK_KEY, newStock.toString());
-  
+
   // Add to history
   const stockHistory = getStockHistory();
   stockHistory.push({
@@ -156,7 +156,7 @@ export const updateStock = (quantity: number, type: Stock['type'], reason: strin
     reason
   });
   localStorage.setItem(STOCK_KEY, JSON.stringify(stockHistory));
-  
+
   return newStock;
 };
 
@@ -192,7 +192,7 @@ export const completeOrder = (orderId: string) => {
   if (typeof window === 'undefined') return null;
   const orders = getOrders();
   const orderIndex = orders.findIndex(o => o.id === orderId);
-  
+
   if (orderIndex !== -1) {
     const order = orders[orderIndex];
     orders[orderIndex] = {
@@ -200,10 +200,10 @@ export const completeOrder = (orderId: string) => {
       status: 'delivered'
     };
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-    
+
     // Update supermarket stats when order is completed
     updateSupermarketStats(order.supermarketId, order.quantity, order.quantity * order.pricePerUnit);
-    
+
     return orders[orderIndex];
   }
   return null;
@@ -214,7 +214,7 @@ export const updateSalePayment = (saleId: string, isPaid: boolean) => {
   if (typeof window === 'undefined') return null;
   const sales = getSales();
   const saleIndex = sales.findIndex(s => s.id === saleId);
-  
+
   if (saleIndex !== -1) {
     sales[saleIndex] = {
       ...sales[saleIndex],
@@ -231,16 +231,16 @@ export const addPayment = (saleId: string, payment: Omit<Payment, 'id'>) => {
   if (typeof window === 'undefined') return null;
   const sales = getSales();
   const saleIndex = sales.findIndex(s => s.id === saleId);
-  
+
   if (saleIndex !== -1) {
     const newPayment = {
       ...payment,
       id: Date.now().toString()
     };
-    
+
     const sale = sales[saleIndex];
     const newRemainingAmount = sale.remainingAmount - payment.amount;
-    
+
     sales[saleIndex] = {
       ...sale,
       payments: [...sale.payments, newPayment],
@@ -248,69 +248,9 @@ export const addPayment = (saleId: string, payment: Omit<Payment, 'id'>) => {
       isPaid: newRemainingAmount <= 0,
       paymentDate: newRemainingAmount <= 0 ? new Date().toISOString() : undefined
     };
-    
+
     localStorage.setItem(SALES_KEY, JSON.stringify(sales));
     return sales[saleIndex];
   }
   return null;
-};
-
-// Migration function to add location data to existing supermarkets
-export const migrateSupermarkets = async () => {
-  if (typeof window === 'undefined') return;
-  const supermarkets = getSupermarkets();
-  let hasChanges = false;
-
-  for (const supermarket of supermarkets) {
-    if (!supermarket.location) {
-      try {
-        console.log(`Migrating supermarket: ${supermarket.name}`);
-        // Geocode the address
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(supermarket.address)}`
-        );
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log(`Geocoding response for ${supermarket.name}:`, data);
-
-        if (data && data.length > 0) {
-          supermarket.location = {
-            lat: parseFloat(data[0].lat),
-            lng: parseFloat(data[0].lon),
-            formattedAddress: data[0].display_name
-          };
-          hasChanges = true;
-          console.log(`Added location to ${supermarket.name}:`, supermarket.location);
-        } else {
-          // Set default location if geocoding fails
-          supermarket.location = {
-            lat: 36.7538,
-            lng: 3.0588,
-            formattedAddress: supermarket.address
-          };
-          hasChanges = true;
-          console.log(`Added default location to ${supermarket.name}:`, supermarket.location);
-        }
-      } catch (error) {
-        console.error(`Error geocoding address for ${supermarket.name}:`, error);
-        // Set default location if geocoding fails
-        supermarket.location = {
-          lat: 36.7538,
-          lng: 3.0588,
-          formattedAddress: supermarket.address
-        };
-        hasChanges = true;
-        console.log(`Added default location to ${supermarket.name} after error:`, supermarket.location);
-      }
-    }
-  }
-
-  if (hasChanges) {
-    console.log("Saving updated supermarkets:", supermarkets);
-    localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
-  }
 }; 

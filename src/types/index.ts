@@ -27,7 +27,7 @@ export interface Supermarket {
   name: string;
   address: string;
   phone: string;
-  email: string;
+  email?: string;
   totalSales: number;
   totalValue: number;
   location: {
