@@ -2,7 +2,8 @@
 
 import type { Sale } from "../types/index";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, Mail, Printer } from "lucide-react";
+import { useState } from "react";
 
 interface InvoiceModalProps {
   sale: Sale;
@@ -15,8 +16,37 @@ export function InvoiceModal({
   supermarketName,
   onClose,
 }: InvoiceModalProps) {
+  const [sending, setSending] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSendEmail = async () => {
+    // Set sending state to show loading indicator
+    setSending(true);
+
+    try {
+      // In a real implementation, you would:
+      // 1. Generate a PDF of the invoice
+      // 2. Send it to the client's email
+
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Show success message
+      setSendSuccess(true);
+
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setSendSuccess(false);
+      }, 3000);
+    } catch (error) {
+      console.error("Error sending invoice:", error);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -114,19 +144,6 @@ export function InvoiceModal({
               )}
             </div>
 
-            {/* Terms */}
-            <div className="mt-6 text-sm text-gray-500">
-              <p>Conditions de paiement:</p>
-              <ul className="list-disc list-inside mt-1">
-                <li>Paiement à 30 jours</li>
-                <li>Pas d&apos;escompte en cas de paiement anticipé</li>
-                <li>
-                  En cas de retard de paiement, une pénalité de 3 fois le taux
-                  d&apos;intérêt légal sera appliquée
-                </li>
-              </ul>
-            </div>
-
             {/* Signature Section */}
             <div className="mt-8 pt-8 border-t">
               <div className="grid grid-cols-2 gap-8">
@@ -145,19 +162,62 @@ export function InvoiceModal({
 
         {/* Footer with Buttons */}
         <div className="p-4 border-t bg-white">
-          <div className="flex justify-end space-x-4">
+          {sendSuccess && (
+            <div className="mb-3 bg-green-100 text-green-800 px-3 py-2 rounded-md text-sm">
+              Facture envoyée avec succès !
+            </div>
+          )}
+          <div className="flex justify-end space-x-3">
             <Button
               onClick={onClose}
               variant="outline"
               className="border-gray-300"
             >
-              Exiter
+              Fermer
             </Button>
             <Button
               onClick={handlePrint}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              variant="outline"
+              className="border-gray-300"
             >
+              <Printer className="h-4 w-4 mr-1" />
               Imprimer
+            </Button>
+            <Button
+              onClick={handleSendEmail}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={sending}
+            >
+              {sending ? (
+                <div className="flex items-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Envoi...
+                </div>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-1" />
+                  Envoyer
+                </>
+              )}
             </Button>
           </div>
         </div>
