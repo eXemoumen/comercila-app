@@ -411,6 +411,10 @@ export default function Dashboard() {
                           border: "none",
                           boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
                         }}
+                        formatter={(value: number | string) => [
+                          `${Number(value).toLocaleString("fr-DZ")} DZD`,
+                          "Bénéfice",
+                        ]}
                       />
                       <Bar
                         dataKey="value"
@@ -433,23 +437,48 @@ export default function Dashboard() {
                 <div className="h-[200px] w-full p-2">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={[
-                        {
-                          name: "Option 180 DZD",
-                          value: dashboardData.monthlySales.profit * 0.7, // Estimated portion from 180 DZD sales
+                      data={Object.entries(monthlyBenefits)
+                        .sort((a, b) => {
+                          // Parse month names in French to properly sort them
+                          const monthNamesMap: Record<string, number> = {
+                            janvier: 0,
+                            février: 1,
+                            mars: 2,
+                            avril: 3,
+                            mai: 4,
+                            juin: 5,
+                            juillet: 6,
+                            août: 7,
+                            septembre: 8,
+                            octobre: 9,
+                            novembre: 10,
+                            décembre: 11,
+                          };
+
+                          // Extract month and year from the formatted strings
+                          const monthA = a[0].split(" ")[0].toLowerCase();
+                          const yearA = a[0].split(" ")[1];
+                          const monthB = b[0].split(" ")[0].toLowerCase();
+                          const yearB = b[0].split(" ")[1];
+
+                          // Compare years first
+                          if (yearA !== yearB) {
+                            return parseInt(yearA) - parseInt(yearB);
+                          }
+
+                          // If years are equal, compare months
+                          return (
+                            (monthNamesMap[monthA] || 0) -
+                            (monthNamesMap[monthB] || 0)
+                          );
+                        })
+                        // Take only the last 6 months of data for better visualization
+                        .slice(-6)
+                        .map(([month, data]) => ({
+                          name: month.split(" ")[0].substring(0, 3),
+                          benefit: data.netBenefit,
                           fill: "#22c55e",
-                        },
-                        {
-                          name: "Option 166 DZD",
-                          value: dashboardData.monthlySales.profit * 0.3, // Estimated portion from 166 DZD sales
-                          fill: "#16a34a",
-                        },
-                        {
-                          name: "Total",
-                          value: dashboardData.monthlySales.profit,
-                          fill: "#0ea5e9",
-                        },
-                      ]}
+                        }))}
                     >
                       <XAxis dataKey="name" axisLine={false} tickLine={false} />
                       <YAxis axisLine={false} tickLine={false} />
@@ -459,17 +488,17 @@ export default function Dashboard() {
                           border: "none",
                           boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
                         }}
-                        formatter={(value) => [
-                          `${value.toLocaleString("fr-DZ")} DZD`,
+                        formatter={(value: number | string) => [
+                          `${Number(value).toLocaleString("fr-DZ")} DZD`,
                           "Bénéfice",
                         ]}
                       />
-                      <Bar dataKey="value" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="benefit" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 rounded-b-xl">
-                  Bénéfice total du mois:{" "}
+                  Bénéfice ce mois-ci:{" "}
                   <span className="font-medium text-green-600">
                     {dashboardData.monthlySales.profit.toLocaleString("fr-DZ")}{" "}
                     DZD
@@ -477,11 +506,7 @@ export default function Dashboard() {
                   <div className="flex items-center mt-1 gap-2">
                     <div className="flex items-center">
                       <div className="w-3 h-3 bg-green-500 rounded-full mr-1"></div>
-                      <span>25 DZD/unité (180 DZD)</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-green-600 rounded-full mr-1"></div>
-                      <span>17 DZD/unité (166 DZD)</span>
+                      <span>Bénéfice net mensuel</span>
                     </div>
                   </div>
                 </div>
@@ -864,10 +889,10 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       label: "Option 1 (180 DZD)",
     },
     option2: {
-      pricePerUnit: 180,
+      pricePerUnit: 166,
       benefitPerUnit: 17,
-      costToSupplier: 163,
-      label: "Option 2 (180 DZD)",
+      costToSupplier: 149,
+      label: "Option 2 (166 DZD)",
     },
   };
 
@@ -1068,7 +1093,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
               onClick={() => setPriceOption("option2")}
             >
               <div className="text-left">
-                <div className="font-medium text-base">180 DZD</div>
+                <div className="font-medium text-base">166 DZD</div>
                 <div
                   className={`text-xs ${
                     priceOption === "option2"
@@ -1076,7 +1101,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                       : "text-gray-500"
                   }`}
                 >
-                  Retour: 163 DZD/unité
+                  Retour: 149 DZD/unité
                 </div>
               </div>
             </Button>
