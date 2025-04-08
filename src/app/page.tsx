@@ -2680,7 +2680,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
                   onClick={() =>
                     setNewOrder((prev) => ({
                       ...prev,
-                      cartons: Math.max(1, prev.cartons - 1),
+                      cartons: Math.max(0, prev.cartons - 1),
                     }))
                   }
                 >
@@ -2693,10 +2693,10 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
                   onChange={(e) =>
                     setNewOrder((prev) => ({
                       ...prev,
-                      cartons: Math.max(1, parseInt(e.target.value) || 1),
+                      cartons: Math.max(0, parseInt(e.target.value) || 0),
                     }))
                   }
-                  min="1"
+                  min="0"
                   required
                 />
                 <Button

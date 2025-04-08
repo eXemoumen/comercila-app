@@ -24,7 +24,10 @@ const supabaseClient = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 // Helper function to check if we're online
 const isOnline = (): boolean => {
-  return typeof window !== 'undefined' && window.navigator.onLine;
+  // Always use local storage for now until Supabase is properly configured
+  return false; 
+  // Original implementation:
+  // return typeof window !== 'undefined' && window.navigator.onLine;
 };
 
 // Helper function to log errors with type safety
