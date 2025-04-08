@@ -1,5 +1,5 @@
 // Types
-interface Sale {
+export interface Sale {
   id: string;
   date: string;
   supermarketId: string;
@@ -14,13 +14,17 @@ interface Sale {
   payments: Payment[];
   remainingAmount: number;
   fromOrder?: boolean;
+  note?: string;
 }
 
-interface Supermarket {
+export interface Supermarket {
   id: string;
   name: string;
   address: string;
-  phone: string;
+  phoneNumbers: {
+    name: string;
+    number: string;
+  }[];
   email?: string;
   totalSales: number;
   totalValue: number;
@@ -31,7 +35,7 @@ interface Supermarket {
   };
 }
 
-interface Stock {
+export interface Stock {
   id: string;
   date: string;
   type: 'added' | 'removed' | 'adjusted';
@@ -40,7 +44,7 @@ interface Stock {
   reason: string;
 }
 
-interface Order {
+export interface Order {
   id: string;
   date: string;
   supermarketId: string;
@@ -50,7 +54,7 @@ interface Order {
   pricePerUnit: number;
 }
 
-interface Payment {
+export interface Payment {
   id: string;
   date: string;
   amount: number;
@@ -113,6 +117,7 @@ export const addSupermarket = (supermarket: Omit<Supermarket, 'id' | 'totalSales
     id: Date.now().toString(),
     totalSales: 0,
     totalValue: 0,
+    phoneNumbers: supermarket.phoneNumbers || [],
     location: supermarket.location || {
       lat: 36.7538,
       lng: 3.0588,
@@ -122,6 +127,27 @@ export const addSupermarket = (supermarket: Omit<Supermarket, 'id' | 'totalSales
   supermarkets.push(newSupermarket);
   localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
   return newSupermarket;
+};
+
+export const updateSupermarket = (id: string, updatedData: Partial<Omit<Supermarket, 'id' | 'totalSales' | 'totalValue'>>): Supermarket | null => {
+  if (typeof window === 'undefined') return null;
+  const supermarkets = getSupermarkets();
+  const index = supermarkets.findIndex(s => s.id === id);
+  
+  if (index !== -1) {
+    // Preserve existing data that's not being updated
+    const updatedSupermarket = {
+      ...supermarkets[index],
+      ...updatedData,
+      // Ensure location is properly updated
+      location: updatedData.location || supermarkets[index].location
+    };
+    
+    supermarkets[index] = updatedSupermarket;
+    localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
+    return updatedSupermarket;
+  }
+  return null;
 };
 
 // Stock CRUD
@@ -253,4 +279,18 @@ export const addPayment = (saleId: string, payment: Omit<Payment, 'id'>) => {
     return sales[saleIndex];
   }
   return null;
+};
+
+export const setSale = (sale: Sale): Sale => {
+  if (typeof window === 'undefined') return sale;
+  const sales = getSales();
+  const index = sales.findIndex(s => s.id === sale.id);
+  if (index !== -1) {
+    sales[index] = sale;
+    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+  } else {
+    sales.push(sale);
+    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+  }
+  return sale;
 }; 

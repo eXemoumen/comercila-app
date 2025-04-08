@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Supermarket } from "@/types";
+import { Supermarket as SupermarketType } from "@/types";
 import { SupermarketMap } from "@/components/SupermarketMap";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,9 +22,9 @@ export default function FindSupermarkets() {
     lat: number;
     lng: number;
   } | null>(null);
-  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
+  const [supermarkets, setSupermarkets] = useState<SupermarketType[]>([]);
   const [filteredSupermarkets, setFilteredSupermarkets] = useState<
-    Supermarket[]
+    SupermarketType[]
   >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +144,7 @@ export default function FindSupermarkets() {
       const overpassData = await overpassResponse.json();
       console.log("Overpass response:", overpassData);
 
-      const nearbySupermarkets: Supermarket[] = overpassData.elements
+      const nearbySupermarkets: SupermarketType[] = overpassData.elements
         .filter(
           (element: { tags?: { name?: string } }) =>
             element.tags && element.tags.name
@@ -193,7 +193,7 @@ export default function FindSupermarkets() {
           }
         )
         .filter(
-          (supermarket: Supermarket) =>
+          (supermarket: SupermarketType) =>
             supermarket.location.lat &&
             supermarket.location.lng &&
             !isNaN(supermarket.location.lat) &&
@@ -267,9 +267,27 @@ export default function FindSupermarkets() {
     const loadSupermarkets = async () => {
       try {
         const loadedSupermarkets = await getSupermarkets();
-        console.log("Loaded supermarkets:", loadedSupermarkets);
-        setSupermarkets(loadedSupermarkets);
-        setFilteredSupermarkets(loadedSupermarkets);
+
+        // Map the storage supermarkets to the expected SupermarketType format
+        const mappedSupermarkets: SupermarketType[] = loadedSupermarkets.map(
+          (sm) => ({
+            id: sm.id,
+            name: sm.name,
+            address: sm.address,
+            // Get the first phone number or fallback to a placeholder
+            phone:
+              sm.phoneNumbers && sm.phoneNumbers.length > 0
+                ? sm.phoneNumbers[0].number
+                : "Non disponible",
+            email: sm.email || "Non disponible",
+            totalSales: sm.totalSales,
+            totalValue: sm.totalValue,
+            location: sm.location,
+          })
+        );
+
+        setSupermarkets(mappedSupermarkets);
+        setFilteredSupermarkets(mappedSupermarkets);
       } catch (error) {
         console.error("Error loading supermarkets:", error);
         setError(

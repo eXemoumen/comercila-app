@@ -46,6 +46,7 @@ import {
   getSales,
   updateSalePayment,
   addPayment,
+  updateSupermarket,
 } from "@/utils/storage";
 import { Sale, Supermarket, Order } from "@/types/index";
 
@@ -219,10 +220,14 @@ export default function Dashboard() {
 
       allSales.forEach((sale) => {
         const date = new Date(sale.date);
-        const monthYear = date.toLocaleDateString("fr-FR", {
+        // Format the month and year in French with proper capitalization
+        let monthYear = date.toLocaleDateString("fr-FR", {
           month: "long",
           year: "numeric",
         });
+
+        // Capitalize the first letter of the month
+        monthYear = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
 
         if (!monthlyData[monthYear]) {
           monthlyData[monthYear] = {
@@ -520,32 +525,75 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {Object.entries(monthlyBenefits)
-                        .sort(
-                          (a, b) =>
-                            new Date(b[0]).getTime() - new Date(a[0]).getTime()
-                        )
+                        .sort((a, b) => {
+                          // Parse month names in French to properly sort them
+                          const monthNamesMap: Record<string, number> = {
+                            janvier: 0,
+                            février: 1,
+                            mars: 2,
+                            avril: 3,
+                            mai: 4,
+                            juin: 5,
+                            juillet: 6,
+                            août: 7,
+                            septembre: 8,
+                            octobre: 9,
+                            novembre: 10,
+                            décembre: 11,
+                          };
+
+                          // Extract month and year from the formatted strings
+                          const monthA = a[0].split(" ")[0].toLowerCase();
+                          const yearA = a[0].split(" ")[1];
+                          const monthB = b[0].split(" ")[0].toLowerCase();
+                          const yearB = b[0].split(" ")[1];
+
+                          // Compare years first
+                          const yearDiff = parseInt(yearB) - parseInt(yearA);
+                          if (yearDiff !== 0) return yearDiff;
+
+                          // If years are equal, compare months
+                          return (
+                            (monthNamesMap[monthB] || 0) -
+                            (monthNamesMap[monthA] || 0)
+                          );
+                        })
                         .map(([month, data]) => {
                           const typedData = data as {
                             quantity: number;
                             value: number;
                             netBenefit: number;
                           };
+
+                          // Calculation for supplier payment
+                          const supplierPayment =
+                            typedData.value - typedData.netBenefit;
+
                           return (
-                            <tr key={month} className="border-b last:border-0">
-                              <td className="py-4">
-                                <div className="flex justify-between items-center">
-                                  <p className="font-medium">{month}</p>
-                                  <p className="text-green-600">
-                                    {typedData.netBenefit.toLocaleString(
-                                      "fr-DZ"
-                                    )}{" "}
-                                    DZD
-                                  </p>
-                                </div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  {typedData.quantity} pièces (
-                                  {Math.floor(typedData.quantity / 9)} cartons)
-                                </div>
+                            <tr
+                              key={month}
+                              className="border-b last:border-0 hover:bg-gray-50"
+                            >
+                              <td className="px-4 py-4 text-sm">
+                                <span className="font-medium">{month}</span>
+                              </td>
+                              <td className="px-4 py-4 text-right text-sm">
+                                <span>{typedData.quantity} pièces</span>
+                                <br />
+                                <span className="text-xs text-gray-500">
+                                  ({Math.floor(typedData.quantity / 9)} cartons)
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-right text-sm">
+                                <span className="font-medium text-green-600">
+                                  {typedData.netBenefit.toLocaleString("fr-DZ")}{" "}
+                                  DZD
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-right text-sm">
+                                <span className="font-medium text-red-600">
+                                  {supplierPayment.toLocaleString("fr-DZ")} DZD
+                                </span>
                               </td>
                             </tr>
                           );
@@ -809,6 +857,9 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
   const [isPaidImmediately, setIsPaidImmediately] = useState(false);
   const [paymentNote, setPaymentNote] = useState("");
   const [expectedPaymentDate, setExpectedPaymentDate] = useState("");
+  const [saleDate, setSaleDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   // Calculate quantity based on cartons (9 pieces per carton)
   const quantity = cartons * 9;
@@ -838,21 +889,27 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
     e.preventDefault();
 
     const sale: Omit<Sale, "id"> = {
-      date: new Date().toISOString(),
+      date: new Date(saleDate).toISOString(),
       supermarketId,
       quantity,
       cartons,
       pricePerUnit: selectedPrice.pricePerUnit,
       totalValue,
       isPaid: isPaidImmediately,
-      paymentDate: isPaidImmediately ? new Date().toISOString() : undefined,
+      paymentDate: isPaidImmediately
+        ? saleDate
+          ? new Date(saleDate).toISOString()
+          : new Date().toISOString()
+        : undefined,
       paymentNote: !isPaidImmediately ? paymentNote : "",
       expectedPaymentDate: !isPaidImmediately ? expectedPaymentDate : "",
       payments: isPaidImmediately
         ? [
             {
               id: Date.now().toString(),
-              date: new Date().toISOString(),
+              date: saleDate
+                ? new Date(saleDate).toISOString()
+                : new Date().toISOString(),
               amount: totalValue,
               note: "Paiement complet",
             },
@@ -867,7 +924,9 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
     updateStock(
       -cartons,
       "removed",
-      `Vente de ${cartons} cartons (${quantity} pièces)`
+      `Vente de ${cartons} cartons (${quantity} pièces) - ${new Date(
+        saleDate
+      ).toLocaleDateString()}`
     );
 
     if (preFillData?.orderId) {
@@ -898,6 +957,19 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       </div>
 
       <div className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Date de vente
+          </label>
+          <input
+            type="date"
+            className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+            value={saleDate}
+            onChange={(e) => setSaleDate(e.target.value)}
+            required
+          />
+        </div>
+
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">
             Supermarché
@@ -1115,7 +1187,7 @@ function SupermarketsPage({
   const [newSupermarket, setNewSupermarket] = useState({
     name: "",
     address: "",
-    phone: "",
+    phoneNumbers: [{ name: "", number: "" }],
     email: "",
     location: {
       lat: 36.7538,
@@ -1137,6 +1209,13 @@ function SupermarketsPage({
     setLoading(true);
 
     try {
+      // Make sure at least one phone number is provided
+      if (!newSupermarket.phoneNumbers[0].number) {
+        alert("Veuillez entrer au moins un numéro de téléphone");
+        setLoading(false);
+        return;
+      }
+
       // Geocode the address
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
@@ -1152,19 +1231,29 @@ function SupermarketsPage({
           formattedAddress: data[0].display_name,
         };
 
+        // Create a properly formatted supermarket object
         const supermarketWithLocation = {
-          ...newSupermarket,
+          name: newSupermarket.name,
+          address: newSupermarket.address,
+          phoneNumbers: newSupermarket.phoneNumbers.filter(
+            (p) => p.number.trim() !== ""
+          ),
           location,
-          // Only include email if it's not empty
           email: newSupermarket.email || undefined,
         };
 
-        addSupermarket(supermarketWithLocation);
+        console.log("Adding supermarket:", supermarketWithLocation);
+
+        // Add the supermarket
+        const added = addSupermarket(supermarketWithLocation);
+        console.log("Added supermarket result:", added);
+
+        // Reset form and state
         setShowAddForm(false);
         setNewSupermarket({
           name: "",
           address: "",
-          phone: "",
+          phoneNumbers: [{ name: "", number: "" }],
           email: "",
           location: {
             lat: 36.7538,
@@ -1178,7 +1267,8 @@ function SupermarketsPage({
         setSupermarkets(loadedSupermarkets);
       }
     } catch (error) {
-      console.error("Error geocoding address:", error);
+      console.error("Error adding supermarket:", error);
+      alert("Une erreur s'est produite lors de l'ajout du supermarché");
     } finally {
       setLoading(false);
     }
@@ -1248,18 +1338,38 @@ function SupermarketsPage({
               <label className="text-sm font-medium text-gray-700">
                 Téléphone
               </label>
-              <input
-                type="tel"
-                className="w-full h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
-                value={newSupermarket.phone}
-                onChange={(e) =>
-                  setNewSupermarket((prev) => ({
-                    ...prev,
-                    phone: e.target.value,
-                  }))
-                }
-                required
-              />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="Nom du contact"
+                  className="flex-1 h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                  value={newSupermarket.phoneNumbers[0].name}
+                  onChange={(e) =>
+                    setNewSupermarket((prev) => ({
+                      ...prev,
+                      phoneNumbers: prev.phoneNumbers.map((phone, index) =>
+                        index === 0 ? { ...phone, name: e.target.value } : phone
+                      ),
+                    }))
+                  }
+                />
+                <input
+                  type="tel"
+                  placeholder="Numéro de téléphone"
+                  className="flex-1 h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                  value={newSupermarket.phoneNumbers[0].number}
+                  onChange={(e) =>
+                    setNewSupermarket((prev) => ({
+                      ...prev,
+                      phoneNumbers: prev.phoneNumbers.map((phone, index) =>
+                        index === 0
+                          ? { ...phone, number: e.target.value }
+                          : phone
+                      ),
+                    }))
+                  }
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1346,6 +1456,15 @@ function SupermarketProfilePage({
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedSupermarket, setEditedSupermarket] = useState<
+    Partial<Supermarket>
+  >({});
+  const [loading, setLoading] = useState(false);
+  const [newPhoneNumber, setNewPhoneNumber] = useState({
+    name: "",
+    number: "",
+  });
 
   useEffect(() => {
     // Load supermarket data
@@ -1359,6 +1478,98 @@ function SupermarketProfilePage({
     );
     setSalesHistory(filteredSales);
   }, [supermarketId]);
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    setEditedSupermarket({
+      name: supermarket?.name || "",
+      address: supermarket?.address || "",
+      phoneNumbers: supermarket?.phoneNumbers || [],
+      email: supermarket?.email || "",
+      location: supermarket?.location || {
+        lat: 36.7538,
+        lng: 3.0588,
+        formattedAddress: "",
+      },
+    });
+  };
+
+  const handleAddPhoneNumber = () => {
+    if (newPhoneNumber.name && newPhoneNumber.number) {
+      setEditedSupermarket((prev) => ({
+        ...prev,
+        phoneNumbers: [...(prev.phoneNumbers || []), newPhoneNumber],
+      }));
+      setNewPhoneNumber({ name: "", number: "" });
+    }
+  };
+
+  const handleRemovePhoneNumber = (index: number) => {
+    setEditedSupermarket((prev) => ({
+      ...prev,
+      phoneNumbers: prev.phoneNumbers?.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleUpdatePhoneNumber = (
+    index: number,
+    field: "name" | "number",
+    value: string
+  ) => {
+    setEditedSupermarket((prev) => ({
+      ...prev,
+      phoneNumbers: prev.phoneNumbers?.map((phone, i) =>
+        i === index ? { ...phone, [field]: value } : phone
+      ),
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!supermarket?.id) return;
+
+    setLoading(true);
+    try {
+      // Geocode the address if it's been changed
+      if (
+        editedSupermarket.address &&
+        editedSupermarket.address !== supermarket.address
+      ) {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            editedSupermarket.address
+          )}`
+        );
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+          editedSupermarket.location = {
+            lat: parseFloat(data[0].lat),
+            lng: parseFloat(data[0].lon),
+            formattedAddress: data[0].display_name,
+          };
+        }
+      }
+
+      // Update the supermarket
+      const updatedSupermarket = await updateSupermarket(
+        supermarket.id,
+        editedSupermarket
+      );
+      if (updatedSupermarket) {
+        setSupermarket(updatedSupermarket);
+        setIsEditing(false);
+      }
+    } catch (error) {
+      console.error("Error updating supermarket:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditedSupermarket({});
+  };
 
   const handlePaymentUpdate = (saleId: string, isPaid: boolean) => {
     updateSalePayment(saleId, isPaid);
@@ -1416,31 +1627,187 @@ function SupermarketProfilePage({
   }, {} as Record<string, { quantity: number; value: number; netBenefit: number }>);
 
   return (
-    <div className="space-y-4 pb-20">
-      <div className="flex items-center mb-4">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ChevronLeft className="h-5 w-5 mr-1" />
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <Button variant="ghost" onClick={onBack} className="gap-2">
+          <ChevronLeft className="h-4 w-4" />
           Retour
         </Button>
-        <h1 className="text-xl font-bold ml-2">{supermarket?.name}</h1>
+        {!isEditing ? (
+          <Button onClick={handleEdit} className="gap-2">
+            <Settings className="h-4 w-4" />
+            Modifier
+          </Button>
+        ) : (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleCancel}>
+              Annuler
+            </Button>
+            <Button onClick={handleSave} disabled={loading}>
+              {loading ? "Enregistrement..." : "Enregistrer"}
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Supermarket Details Card */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="space-y-2">
-            <div>
-              <p className="text-sm text-muted-foreground">Adresse</p>
-              <p className="font-medium">{supermarket?.address}</p>
+      {supermarket && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedSupermarket.name || ""}
+                  onChange={(e) =>
+                    setEditedSupermarket({
+                      ...editedSupermarket,
+                      name: e.target.value,
+                    })
+                  }
+                  className="w-full p-2 border rounded"
+                />
+              ) : (
+                supermarket.name
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Adresse</p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editedSupermarket.address || ""}
+                    onChange={(e) =>
+                      setEditedSupermarket({
+                        ...editedSupermarket,
+                        address: e.target.value,
+                      })
+                    }
+                    className="w-full p-2 border rounded mt-1"
+                  />
+                ) : (
+                  <p className="font-medium">{supermarket.address}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Contact</p>
+                {isEditing ? (
+                  <div className="space-y-4 mt-1">
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          placeholder="Nom du contact"
+                          value={newPhoneNumber.name}
+                          onChange={(e) =>
+                            setNewPhoneNumber((prev) => ({
+                              ...prev,
+                              name: e.target.value,
+                            }))
+                          }
+                          className="flex-1 p-2 border rounded w-full"
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Numéro"
+                          value={newPhoneNumber.number}
+                          onChange={(e) =>
+                            setNewPhoneNumber((prev) => ({
+                              ...prev,
+                              number: e.target.value,
+                            }))
+                          }
+                          className="flex-1 p-2 border rounded w-full"
+                        />
+                        <Button
+                          onClick={handleAddPhoneNumber}
+                          disabled={
+                            !newPhoneNumber.name || !newPhoneNumber.number
+                          }
+                          className="px-3 whitespace-nowrap"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {editedSupermarket.phoneNumbers?.map((phone, index) => (
+                        <div
+                          key={index}
+                          className="flex flex-col sm:flex-row gap-2 items-start sm:items-center"
+                        >
+                          <input
+                            type="text"
+                            value={phone.name}
+                            onChange={(e) =>
+                              handleUpdatePhoneNumber(
+                                index,
+                                "name",
+                                e.target.value
+                              )
+                            }
+                            className="flex-1 p-2 border rounded w-full"
+                          />
+                          <input
+                            type="tel"
+                            value={phone.number}
+                            onChange={(e) =>
+                              handleUpdatePhoneNumber(
+                                index,
+                                "number",
+                                e.target.value
+                              )
+                            }
+                            className="flex-1 p-2 border rounded w-full"
+                          />
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleRemovePhoneNumber(index)}
+                            className="px-3 text-red-500 hover:text-red-700 whitespace-nowrap"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <input
+                      type="email"
+                      value={editedSupermarket.email || ""}
+                      onChange={(e) =>
+                        setEditedSupermarket({
+                          ...editedSupermarket,
+                          email: e.target.value,
+                        })
+                      }
+                      className="w-full p-2 border rounded"
+                      placeholder="Email (optionnel)"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      {supermarket.phoneNumbers?.map((phone, index) => (
+                        <div
+                          key={index}
+                          className="flex flex-col sm:flex-row items-start sm:items-center gap-2"
+                        >
+                          <p className="font-medium min-w-[100px]">
+                            {phone.name}:
+                          </p>
+                          <p className="text-sm">{phone.number}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm mt-2">{supermarket.email}</p>
+                  </>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Contact</p>
-              <p className="font-medium">{supermarket?.phone}</p>
-              <p className="text-sm">{supermarket?.email}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Updated Statistics Card */}
       <Card>
@@ -1491,9 +1858,38 @@ function SupermarketProfilePage({
         <CardContent className="p-4">
           <div className="space-y-4">
             {Object.entries(monthlyBenefits)
-              .sort(
-                (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
-              )
+              .sort((a, b) => {
+                // Parse month names in French to properly sort them
+                const monthNamesMap: Record<string, number> = {
+                  janvier: 0,
+                  février: 1,
+                  mars: 2,
+                  avril: 3,
+                  mai: 4,
+                  juin: 5,
+                  juillet: 6,
+                  août: 7,
+                  septembre: 8,
+                  octobre: 9,
+                  novembre: 10,
+                  décembre: 11,
+                };
+
+                // Extract month and year from the formatted strings
+                const monthA = a[0].split(" ")[0].toLowerCase();
+                const yearA = a[0].split(" ")[1];
+                const monthB = b[0].split(" ")[0].toLowerCase();
+                const yearB = b[0].split(" ")[1];
+
+                // Compare years first
+                const yearDiff = parseInt(yearB) - parseInt(yearA);
+                if (yearDiff !== 0) return yearDiff;
+
+                // If years are equal, compare months
+                return (
+                  (monthNamesMap[monthB] || 0) - (monthNamesMap[monthA] || 0)
+                );
+              })
               .map(([month, data]) => {
                 const typedData = data as {
                   quantity: number;
