@@ -3,7 +3,24 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { InvoiceModal } from "@/components/InvoiceModal";
-
+import {
+  getSupermarkets,
+  getSales,
+  getOrders,
+  updateSalePayment,
+  getCurrentStock,
+  getStockHistory,
+  updateStock,
+  addSale,
+  addOrder,
+  addSupermarket,
+  updateSupermarket,
+  deleteOrder,
+  addPayment,
+} from "@/utils/storage";
+import type { Sale, Order, Supermarket } from "@/types/index";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Calendar,
   Home,
@@ -21,6 +38,7 @@ import {
   X,
   Menu,
   MapPin,
+  Phone,
 } from "lucide-react";
 import {
   BarChart,
@@ -30,25 +48,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  addSale,
-  getSupermarkets,
-  getOrders,
-  addOrder,
-  deleteOrder,
-  getStockHistory,
-  getCurrentStock,
-  updateStock,
-  addSupermarket,
-  getSales,
-  updateSalePayment,
-  addPayment,
-  updateSupermarket,
-} from "@/utils/storage";
-import { Sale, Supermarket, Order } from "@/types/index";
 
 interface SupermarketsPageProps {
   onBack: () => void;
@@ -375,14 +374,6 @@ export default function Dashboard() {
                           "fr-DZ"
                         )}{" "}
                         DZD
-                      </div>
-                      <div className="flex items-center mt-1">
-                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full">
-                          Option 1: 155 DZD/unité
-                        </span>
-                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full ml-1">
-                          Option 2: 149 DZD/unité
-                        </span>
                       </div>
                     </div>
                     <div className="text-3xl font-bold text-red-500">
@@ -1798,6 +1789,20 @@ function SupermarketProfilePage({
                             {phone.name}:
                           </p>
                           <p className="text-sm">{phone.number}</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="ml-auto text-green-600 border-green-300 hover:bg-green-50"
+                            onClick={() =>
+                              window.open(
+                                `tel:${phone.number.replace(/\s+/g, "")}`,
+                                "_self"
+                              )
+                            }
+                          >
+                            <Phone className="h-4 w-4 mr-1" />
+                            Appeler
+                          </Button>
                         </div>
                       ))}
                     </div>

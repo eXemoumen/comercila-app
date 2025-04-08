@@ -14,9 +14,20 @@ interface InvoiceModalProps {
 }
 
 // Function to generate and retrieve invoice numbers
-const getInvoiceNumber = (): string => {
+const getInvoiceNumber = (saleId: string): string => {
   if (typeof window === "undefined") return "BL-001";
 
+  // Check if this sale already has a stored invoice number
+  const INVOICE_NUMBERS_KEY = "invoice_numbers";
+  const storedNumbers = localStorage.getItem(INVOICE_NUMBERS_KEY);
+  const numberMap = storedNumbers ? JSON.parse(storedNumbers) : {};
+
+  // If this sale already has an invoice number, return it
+  if (numberMap[saleId]) {
+    return numberMap[saleId];
+  }
+
+  // Otherwise generate a new one
   // Get the current date in YYMMDD format
   const today = new Date();
   const year = today.getFullYear().toString().slice(-2);
@@ -54,7 +65,13 @@ const getInvoiceNumber = (): string => {
 
   // Format the invoice number
   const counterStr = counter.toString().padStart(3, "0");
-  return `BL-${datePrefix}-${counterStr}`;
+  const invoiceNumber = `BL-${datePrefix}-${counterStr}`;
+
+  // Store this invoice number for this sale
+  numberMap[saleId] = invoiceNumber;
+  localStorage.setItem(INVOICE_NUMBERS_KEY, JSON.stringify(numberMap));
+
+  return invoiceNumber;
 };
 
 export function InvoiceModal({
@@ -71,10 +88,10 @@ export function InvoiceModal({
   // Ref for the invoice content that will be turned into PDF
   const invoiceRef = useRef<HTMLDivElement>(null);
 
-  // Generate invoice number when component mounts
+  // Generate invoice number once when component mounts
   useEffect(() => {
-    setInvoiceNumber(getInvoiceNumber());
-  }, []);
+    setInvoiceNumber(getInvoiceNumber(sale.id));
+  }, [sale.id]);
 
   const handlePrint = () => {
     window.print();
