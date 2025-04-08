@@ -849,7 +849,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
     preFillData?.supermarketId || ""
   );
   const [cartons, setCartons] = useState(
-    preFillData ? Math.ceil(preFillData.quantity / 9) : 1
+    preFillData ? Math.ceil(preFillData.quantity / 9) : 0
   );
   const [priceOption, setPriceOption] = useState<"option1" | "option2">(
     "option1"
@@ -998,7 +998,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
               type="button"
               variant="outline"
               className="rounded-l-xl h-12 w-12 flex items-center justify-center border-gray-200"
-              onClick={() => setCartons((c) => Math.max(1, c - 1))}
+              onClick={() => setCartons((c) => Math.max(0, c - 1))}
             >
               <Minus className="h-4 w-4" />
             </Button>
@@ -1012,7 +1012,8 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                 setCartons(value);
               }}
               onBlur={() => {
-                if (cartons < 1) setCartons(1);
+                // Don't force minimum of 1
+                if (cartons < 0) setCartons(0);
               }}
               min="0"
               required
@@ -2566,7 +2567,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
     date: "",
     supermarketId: "",
     quantity: 0,
-    cartons: 0,
+    cartons: 0, // Default to 0 cartons
     priceOption: "option1",
   });
   const [orders, setOrders] = useState<Order[]>([]);
@@ -2594,6 +2595,15 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
       };
 
       addOrder(order);
+      // Reset form and hide it
+      setNewOrder({
+        date: "",
+        supermarketId: "",
+        quantity: 0,
+        cartons: 0,
+        priceOption: "option1",
+      });
+      setShowForm(false);
       // Reload the page to refresh all data
       window.location.reload();
     }
