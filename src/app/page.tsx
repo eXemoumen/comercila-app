@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { InvoiceModal } from "@/components/InvoiceModal";
+import { OfflineStatus } from "@/components/OfflineStatus";
+import { initializeOfflineHandling } from "@/utils/offline";
 
 import {
   Calendar,
@@ -13,7 +15,7 @@ import {
   ChevronLeft,
   Plus,
   Trash2,
-  Settings,
+  Settings as SettingsIcon,
   Check,
   ChevronRight,
   Minus,
@@ -46,8 +48,12 @@ import {
   getSales,
   updateSalePayment,
   addPayment,
-} from "@/utils/storage";
+} from "@/utils/database";
 import { Sale, Supermarket, Order } from "@/types/index";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { Settings } from "@/components/Settings";
+import * as storage from "@/utils/storage";
+import { isOnline } from "@/utils/offline";
 
 interface SupermarketsPageProps {
   onBack: () => void;
@@ -72,6 +78,7 @@ interface AddSalePageProps {
     quantity: number;
     orderId?: string;
   } | null;
+  setActiveTab: (tab: string) => void;
 }
 
 interface StockPageProps {
@@ -82,7 +89,7 @@ interface StockHistoryItem {
   id: string;
   date: string;
   quantity: number;
-  type?: "added" | "removed" | "adjusted";
+  type?: "added" | "removed" | "adjusted" | "in" | "out";
   reason?: string;
 }
 
@@ -93,10 +100,27 @@ interface MonthlyData {
   netBenefit: number;
 }
 
+// Add this constant at the top level of the file
+const priceOptions = {
+  option1: {
+    pricePerUnit: 180,
+    benefitPerUnit: 25,
+    costToSupplier: 155,
+    label: "Option 1 (180 DZD)",
+  },
+  option2: {
+    pricePerUnit: 180,
+    benefitPerUnit: 17,
+    costToSupplier: 163,
+    label: "Option 2 (180 DZD)",
+  },
+};
+
 export default function Dashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showMenu, setShowMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [selectedSupermarketId, setSelectedSupermarketId] =
     useState<string>("");
   const [preFillSaleData, setPreFillSaleData] = useState<{
@@ -113,111 +137,196 @@ export default function Dashboard() {
       supplierPayment: 0,
     },
     salesData: [] as { name: string; value: number }[],
+    supermarketStats: [] as {
+      id: string;
+      name: string;
+      totalSales: number;
+      totalValue: number;
+    }[],
+    pendingOrders: {
+      count: 0,
+      totalQuantity: 0,
+    },
   });
+
+  // Initialize offline handling
+  useEffect(() => {
+    initializeOfflineHandling();
+  }, []);
 
   // Add this calculation in the Dashboard component, after the dashboardData state
   const [monthlyBenefits, setMonthlyBenefits] = useState<
     Record<string, MonthlyData>
   >({});
 
-  // Load and update dashboard data
-  useEffect(() => {
-    const updateDashboardData = () => {
-      // Get current month's sales
-      const allSales = getSales();
-      const currentDate = new Date();
-      const currentMonth = currentDate.getMonth();
-      const currentYear = currentDate.getFullYear();
+  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [currentStock, setCurrentStock] = useState<number>(0);
 
-      const monthlySales = allSales.filter((sale) => {
+  // Define updateDashboardData function outside useEffect
+  const updateDashboardData = () => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+
+    const monthlySales = sales.filter((sale) => {
+      const saleDate = new Date(sale.date);
+      return (
+        saleDate.getMonth() === currentMonth &&
+        saleDate.getFullYear() === currentYear
+      );
+    });
+
+    // Calculate monthly statistics
+    const totalQuantity = monthlySales.reduce(
+      (acc, sale) => acc + sale.quantity,
+      0
+    );
+    const totalRevenue = monthlySales.reduce(
+      (acc, sale) => acc + sale.totalValue,
+      0
+    );
+
+    // Calculate profit based on the actual pricePerUnit from sales
+    const totalProfit = monthlySales.reduce((acc, sale) => {
+      const benefitPerUnit =
+        sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
+      return acc + sale.quantity * benefitPerUnit;
+    }, 0);
+
+    // Calculate supplier payment amount
+    const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
+      const supplierCostPerUnit =
+        sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
+      return acc + sale.quantity * supplierCostPerUnit;
+    }, 0);
+
+    // Get last 7 days sales data
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date;
+    }).reverse();
+
+    const salesData = last7Days.map((date) => {
+      const daySales = sales.filter((sale) => {
         const saleDate = new Date(sale.date);
-        return (
-          saleDate.getMonth() === currentMonth &&
-          saleDate.getFullYear() === currentYear
-        );
+        return saleDate.toDateString() === date.toDateString();
       });
 
-      // Calculate monthly statistics
-      const totalQuantity = monthlySales.reduce(
-        (acc, sale) => acc + sale.quantity,
-        0
-      );
-      const totalRevenue = monthlySales.reduce(
+      const totalValue = daySales.reduce(
         (acc, sale) => acc + sale.totalValue,
         0
       );
 
-      // Calculate profit based on the actual pricePerUnit from sales
-      const totalProfit = monthlySales.reduce((acc, sale) => {
-        // Determine benefit per unit based on sale price
-        const benefitPerUnit =
-          sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-        return acc + sale.quantity * benefitPerUnit;
-      }, 0);
+      return {
+        name: date.toLocaleDateString("fr-FR", { weekday: "short" }),
+        value: totalValue,
+      };
+    });
 
-      // Calculate supplier payment amount - new addition
-      const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
-        // Determine supplier cost per unit based on sale price
-        const supplierCostPerUnit =
-          sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
-        return acc + sale.quantity * supplierCostPerUnit;
-      }, 0);
+    // Calculate supermarket statistics
+    const supermarketStats = supermarkets.map((sm) => {
+      const supermarketSales = sales.filter((s) => s.supermarketId === sm.id);
+      const totalSales = supermarketSales.reduce(
+        (acc, sale) => acc + sale.quantity,
+        0
+      );
+      const totalValue = supermarketSales.reduce(
+        (acc, sale) => acc + sale.totalValue,
+        0
+      );
 
-      const currentStock = getCurrentStock();
+      return {
+        id: sm.id,
+        name: sm.name,
+        totalSales,
+        totalValue,
+      };
+    });
 
-      // Get last 7 days sales data
-      const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        return date;
-      }).reverse();
+    // Calculate pending orders statistics
+    const pendingOrders = orders.filter((order) => order.status === "pending");
+    const pendingOrdersCount = pendingOrders.length;
+    const pendingOrdersTotal = pendingOrders.reduce(
+      (acc, order) => acc + order.quantity,
+      0
+    );
 
-      const salesData = last7Days.map((date) => {
-        const daySales = allSales.filter((sale) => {
-          const saleDate = new Date(sale.date);
-          return saleDate.toDateString() === date.toDateString();
-        });
+    setDashboardData({
+      monthlySales: {
+        quantity: totalQuantity,
+        revenue: totalRevenue,
+        profit: totalProfit,
+        stock: currentStock * 9,
+        supplierPayment: totalSupplierPayment,
+      },
+      salesData,
+      supermarketStats,
+      pendingOrders: {
+        count: pendingOrdersCount,
+        totalQuantity: pendingOrdersTotal,
+      },
+    });
+  };
 
-        const totalValue = daySales.reduce(
-          (acc, sale) => acc + sale.totalValue,
-          0
-        );
+  // Load initial data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Load data from localStorage first
+        const localSupermarkets = storage.getSupermarkets();
+        const localSales = storage.getSales();
+        const localOrders = storage.getOrders();
+        const localCurrentStock = storage.getCurrentStock();
 
-        return {
-          name: date.toLocaleDateString("fr-FR", { weekday: "short" }),
-          value: totalValue,
-        };
-      });
+        // Set initial data from localStorage
+        setSupermarkets(localSupermarkets);
+        setSales(localSales);
+        setOrders(localOrders);
+        setCurrentStock(localCurrentStock);
 
-      setDashboardData({
-        monthlySales: {
-          quantity: totalQuantity,
-          revenue: totalRevenue,
-          profit: totalProfit,
-          stock: currentStock * 9, // Convert cartons to units
-          supplierPayment: totalSupplierPayment, // Add supplier payment to dashboard data
-        },
-        salesData,
-      });
+        // If online, try to sync with Supabase
+        if (isOnline()) {
+          try {
+            const remoteSupermarkets = await getSupermarkets();
+            const remoteSales = await getSales();
+            const remoteOrders = await getOrders();
+            const remoteCurrentStock = await getCurrentStock();
+
+            // Update state with remote data if available
+            if (remoteSupermarkets.length > 0)
+              setSupermarkets(remoteSupermarkets);
+            if (remoteSales.length > 0) setSales(remoteSales);
+            if (remoteOrders.length > 0) setOrders(remoteOrders);
+            if (remoteCurrentStock > 0) setCurrentStock(remoteCurrentStock);
+          } catch (error) {
+            console.error("Error syncing with Supabase:", error);
+            // Keep using localStorage data if Supabase sync fails
+          }
+        }
+
+        // Update dashboard data
+        updateDashboardData();
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
     };
-
-    // Initial load
-    updateDashboardData();
-
-    // Set up interval to update data every minute
-    const interval = setInterval(updateDashboardData, 60000);
-
-    // Cleanup interval on unmount
-    return () => clearInterval(interval);
+    loadData();
   }, []);
 
-  // Add this useEffect after the existing dashboard data useEffect
+  // Update dashboard data when sales change
+  useEffect(() => {
+    updateDashboardData();
+  }, [sales, currentStock, supermarkets, orders]);
+
+  // Calculate monthly benefits
   useEffect(() => {
     const calculateMonthlyBenefits = () => {
-      const allSales = getSales();
       const monthlyData: Record<string, MonthlyData> = {};
 
-      allSales.forEach((sale) => {
+      sales.forEach((sale) => {
         const date = new Date(sale.date);
         const monthYear = date.toLocaleDateString("fr-FR", {
           month: "long",
@@ -244,7 +353,7 @@ export default function Dashboard() {
     };
 
     calculateMonthlyBenefits();
-  }, []);
+  }, [sales]);
 
   // Add this effect to check localStorage for active tab
   useEffect(() => {
@@ -532,20 +641,31 @@ export default function Dashboard() {
                           };
                           return (
                             <tr key={month} className="border-b last:border-0">
-                              <td className="py-4">
-                                <div className="flex justify-between items-center">
-                                  <p className="font-medium">{month}</p>
-                                  <p className="text-green-600">
-                                    {typedData.netBenefit.toLocaleString(
-                                      "fr-DZ"
-                                    )}{" "}
-                                    DZD
-                                  </p>
-                                </div>
-                                <div className="text-sm text-muted-foreground mt-1">
+                              <td className="px-4 py-3">
+                                <p className="font-medium">{month}</p>
+                                <p className="text-sm text-muted-foreground">
                                   {typedData.quantity} pièces (
                                   {Math.floor(typedData.quantity / 9)} cartons)
-                                </div>
+                                </p>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <p className="font-medium">
+                                  {typedData.value.toLocaleString("fr-DZ")} DZD
+                                </p>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <p className="text-green-600">
+                                  {typedData.netBenefit.toLocaleString("fr-DZ")}{" "}
+                                  DZD
+                                </p>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <p className="text-red-600">
+                                  {(
+                                    typedData.value - typedData.netBenefit
+                                  ).toLocaleString("fr-DZ")}{" "}
+                                  DZD
+                                </p>
                               </td>
                             </tr>
                           );
@@ -601,6 +721,7 @@ export default function Dashboard() {
           <AddSalePage
             onBack={() => setActiveTab("dashboard")}
             preFillData={preFillSaleData}
+            setActiveTab={setActiveTab}
           />
         );
       case "supermarkets":
@@ -670,15 +791,31 @@ export default function Dashboard() {
           </span>
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 rounded-full"
-          onClick={() => setShowMenu(!showMenu)}
-        >
-          <Menu className="h-5 w-5 text-gray-500" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full"
+            onClick={() => setShowSettings(true)}
+          >
+            <SettingsIcon className="h-5 w-5 text-gray-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full"
+            onClick={() => setShowMenu(!showMenu)}
+          >
+            <Menu className="h-5 w-5 text-gray-500" />
+          </Button>
+        </div>
       </div>
+
+      {/* Global Search */}
+      <GlobalSearch />
+
+      {/* Settings Modal */}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
 
       {/* Hamburger Menu */}
       {showMenu && (
@@ -792,11 +929,14 @@ export default function Dashboard() {
       {/* Add padding to account for fixed top navigation */}
       <div className="pt-20">{renderContent()}</div>
       <ClearDataButton />
+
+      {/* Add OfflineStatus component */}
+      <OfflineStatus />
     </main>
   );
 }
 
-function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
+function AddSalePage({ onBack, preFillData, setActiveTab }: AddSalePageProps) {
   const [supermarketId, setSupermarketId] = useState(
     preFillData?.supermarketId || ""
   );
@@ -809,73 +949,104 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
   const [isPaidImmediately, setIsPaidImmediately] = useState(false);
   const [paymentNote, setPaymentNote] = useState("");
   const [expectedPaymentDate, setExpectedPaymentDate] = useState("");
+  const [saleDate, setSaleDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Calculate quantity based on cartons (9 pieces per carton)
-  const quantity = cartons * 9;
-
-  // Price options configuration
-  const priceOptions = {
-    option1: {
-      pricePerUnit: 180,
-      benefitPerUnit: 25,
-      costToSupplier: 155,
-      label: "Option 1 (180 DZD)",
-    },
-    option2: {
-      pricePerUnit: 180,
-      benefitPerUnit: 17,
-      costToSupplier: 163,
-      label: "Option 2 (180 DZD)",
-    },
-  };
-
-  const selectedPrice = priceOptions[priceOption];
-  const totalValue = quantity * selectedPrice.pricePerUnit;
-  const totalBenefit = quantity * selectedPrice.benefitPerUnit;
-  const totalCostToSupplier = quantity * selectedPrice.costToSupplier;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const sale: Omit<Sale, "id"> = {
-      date: new Date().toISOString(),
-      supermarketId,
-      quantity,
-      cartons,
-      pricePerUnit: selectedPrice.pricePerUnit,
-      totalValue,
-      isPaid: isPaidImmediately,
-      paymentDate: isPaidImmediately ? new Date().toISOString() : undefined,
-      paymentNote: !isPaidImmediately ? paymentNote : "",
-      expectedPaymentDate: !isPaidImmediately ? expectedPaymentDate : "",
-      payments: isPaidImmediately
-        ? [
-            {
-              id: Date.now().toString(),
-              date: new Date().toISOString(),
-              amount: totalValue,
-              note: "Paiement complet",
-            },
-          ]
-        : [],
-      remainingAmount: isPaidImmediately ? 0 : totalValue,
+  useEffect(() => {
+    const loadSupermarkets = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const data = await getSupermarkets();
+        setSupermarkets(data);
+      } catch (err) {
+        setError(
+          "Failed to load supermarkets. Please check your internet connection."
+        );
+        console.error("Error loading supermarkets:", err);
+      } finally {
+        setIsLoading(false);
+      }
     };
+    loadSupermarkets();
+  }, []);
 
-    addSale(sale);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
-    // Update stock by removing the sold cartons
-    updateStock(
-      -cartons,
-      "removed",
-      `Vente de ${cartons} cartons (${quantity} pièces)`
-    );
+    try {
+      const quantity = cartons * 9;
+      const selectedPrice = priceOptions[priceOption];
+      const totalValue = quantity * selectedPrice.pricePerUnit;
+      const selectedSupermarket = supermarkets.find(
+        (sm) => sm.id === supermarketId
+      );
 
-    if (preFillData?.orderId) {
-      deleteOrder(preFillData.orderId);
+      if (!selectedSupermarket) {
+        throw new Error("Please select a supermarket");
+      }
+
+      const sale: Omit<Sale, "id"> = {
+        date: new Date(saleDate).toISOString(),
+        supermarketId,
+        supermarketName: selectedSupermarket.name,
+        quantity,
+        cartons,
+        pricePerUnit: selectedPrice.pricePerUnit,
+        totalValue,
+        isPaid: isPaidImmediately,
+        paymentDate: isPaidImmediately ? new Date().toISOString() : undefined,
+        paymentNote: !isPaidImmediately ? paymentNote : "",
+        expectedPaymentDate: !isPaidImmediately ? expectedPaymentDate : "",
+        payments: isPaidImmediately
+          ? [
+              {
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                amount: totalValue,
+                note: "Paiement complet",
+              },
+            ]
+          : [],
+        remainingAmount: isPaidImmediately ? 0 : totalValue,
+      };
+
+      // Add the sale to the database
+      const addedSale = await addSale(sale);
+      if (!addedSale) {
+        throw new Error("Failed to add sale");
+      }
+
+      // Update stock
+      await updateStock(
+        -cartons,
+        "removed",
+        `Vente de ${cartons} cartons (${quantity} pièces)`
+      );
+
+      // Delete order if this was from an order
+      if (preFillData?.orderId) {
+        await deleteOrder(preFillData.orderId);
+      }
+
+      // Redirect to supermarkets page
+      setActiveTab("supermarkets");
+    } catch (error) {
+      console.error("Error adding sale:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to add sale. Please try again."
+      );
+    } finally {
+      setIsLoading(false);
     }
-
-    // Reload the page to refresh all data
-    window.location.reload();
   };
 
   return (
@@ -888,6 +1059,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
             size="icon"
             onClick={onBack}
             className="mr-1"
+            disabled={isLoading}
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
@@ -896,6 +1068,12 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
           </h1>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
 
       <div className="space-y-6">
         <div className="space-y-2">
@@ -907,9 +1085,10 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
             value={supermarketId}
             onChange={(e) => setSupermarketId(e.target.value)}
             required
+            disabled={isLoading}
           >
             <option value="">Sélectionner un supermarché</option>
-            {getSupermarkets().map((sm) => (
+            {supermarkets.map((sm) => (
               <option key={sm.id} value={sm.id}>
                 {sm.name}
               </option>
@@ -961,7 +1140,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
             Quantité Totale (Pièces)
           </label>
           <div className="flex items-center border border-gray-200 rounded-xl p-3 bg-gray-50">
-            <span className="text-lg font-medium">{quantity} pièces</span>
+            <span className="text-lg font-medium">{cartons * 9} pièces</span>
           </div>
         </div>
 
@@ -1025,7 +1204,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
           </label>
           <div className="flex items-center border border-gray-200 rounded-xl p-3 bg-gray-50">
             <span className="text-lg font-medium text-blue-600">
-              {totalValue.toLocaleString("fr-DZ")} DZD
+              {cartons * 9 * priceOptions[priceOption].pricePerUnit} DZD
             </span>
           </div>
         </div>
@@ -1079,28 +1258,56 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
           <div className="space-y-1">
             <p>1 carton = 9 pièces de savon</p>
             <p>
-              Quantité totale = {cartons} cartons × 9 = {quantity} pièces
+              Quantité totale = {cartons} cartons × 9 = {cartons * 9} pièces
             </p>
-            <p>Prix unitaire = {selectedPrice.pricePerUnit} DZD</p>
+            <p>Prix unitaire = {priceOptions[priceOption].pricePerUnit} DZD</p>
             <p>
-              Montant total = {quantity} × {selectedPrice.pricePerUnit} ={" "}
-              {totalValue.toLocaleString("fr-DZ")} DZD
+              Montant total = {cartons * 9} ×{" "}
+              {priceOptions[priceOption].pricePerUnit} ={" "}
+              {cartons * 9 * priceOptions[priceOption].pricePerUnit} DZD
             </p>
             <p className="text-green-600">
-              Bénéfice total = {totalBenefit.toLocaleString("fr-DZ")} DZD
+              Bénéfice total ={" "}
+              {cartons * 9 * priceOptions[priceOption].benefitPerUnit} DZD
             </p>
             <p className="text-red-600">
               À retourner au fournisseur ={" "}
-              {totalCostToSupplier.toLocaleString("fr-DZ")} DZD
+              {cartons * 9 * priceOptions[priceOption].costToSupplier} DZD
             </p>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Date de la Vente
+          </label>
+          <input
+            type="date"
+            className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+            value={saleDate}
+            onChange={(e) => setSaleDate(e.target.value)}
+            max={new Date().toISOString().split("T")[0]}
+            required
+          />
         </div>
 
         <Button
           type="submit"
           className="w-full h-14 mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-md"
+          disabled={isLoading}
         >
-          {preFillData ? "Confirmer la Livraison" : "Enregistrer la Vente"}
+          {isLoading ? (
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+              {preFillData
+                ? "Confirmation en cours..."
+                : "Enregistrement en cours..."}
+            </div>
+          ) : preFillData ? (
+            "Confirmer la Livraison"
+          ) : (
+            "Enregistrer la Vente"
+          )}
         </Button>
       </div>
     </form>
@@ -1124,20 +1331,51 @@ function SupermarketsPage({
     },
   });
   const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Load supermarkets on component mount
   useEffect(() => {
-    const loadedSupermarkets = getSupermarkets();
-    setSupermarkets(loadedSupermarkets);
+    const loadData = async () => {
+      const [supermarketsData, salesData] = await Promise.all([
+        getSupermarkets(),
+        getSales(),
+      ]);
+      setSupermarkets(supermarketsData);
+      setSales(salesData);
+    };
+    loadData();
   }, []);
+
+  // Calculate total sales and cartons for each supermarket
+  const getSupermarketStats = (supermarketId: string) => {
+    const supermarketSales = sales.filter(
+      (sale: Sale) => sale.supermarketId === supermarketId
+    );
+    const totalSales = supermarketSales.reduce(
+      (sum, sale) => sum + sale.quantity,
+      0
+    );
+    const totalValue = supermarketSales.reduce(
+      (sum, sale) => sum + sale.totalValue,
+      0
+    );
+    const totalCartons = supermarketSales.reduce(
+      (sum, sale) => sum + sale.cartons,
+      0
+    );
+
+    return {
+      totalSales,
+      totalValue,
+      totalCartons,
+    };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Geocode the address
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           newSupermarket.address
@@ -1155,11 +1393,12 @@ function SupermarketsPage({
         const supermarketWithLocation = {
           ...newSupermarket,
           location,
-          // Only include email if it's not empty
           email: newSupermarket.email || undefined,
+          totalSales: 0,
+          totalValue: 0,
         };
 
-        addSupermarket(supermarketWithLocation);
+        await addSupermarket(supermarketWithLocation);
         setShowAddForm(false);
         setNewSupermarket({
           name: "",
@@ -1173,9 +1412,8 @@ function SupermarketsPage({
           },
         });
 
-        // Refresh the supermarkets list
-        const loadedSupermarkets = getSupermarkets();
-        setSupermarkets(loadedSupermarkets);
+        const updatedSupermarkets = await getSupermarkets();
+        setSupermarkets(updatedSupermarkets);
       }
     } catch (error) {
       console.error("Error geocoding address:", error);
@@ -1303,30 +1541,34 @@ function SupermarketsPage({
             Aucun supermarché enregistré
           </div>
         ) : (
-          supermarkets.map((supermarket) => (
-            <div
-              key={supermarket.id}
-              className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
-              onClick={() => onViewSupermarket(supermarket.id)}
-            >
-              <div>
-                <h3 className="font-medium">{supermarket.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  Total des ventes:{" "}
-                  {supermarket.totalValue.toLocaleString("fr-DZ")} DZD
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {supermarket.location.formattedAddress}
-                </p>
+          supermarkets.map((supermarket) => {
+            const stats = getSupermarketStats(supermarket.id);
+            return (
+              <div
+                key={supermarket.id}
+                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+                onClick={() => onViewSupermarket(supermarket.id)}
+              >
+                <div>
+                  <h3 className="font-medium">{supermarket.name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Total des ventes: {stats.totalValue.toLocaleString("fr-DZ")}{" "}
+                    DZD
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {supermarket.location.formattedAddress}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">{stats.totalCartons} cartons</p>
+                  <p className="text-sm text-muted-foreground">
+                    {stats.totalSales} pièces
+                  </p>
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-medium">
-                  {Math.ceil(supermarket.totalSales / 9)} cartons
-                </p>
-                <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -1346,23 +1588,53 @@ function SupermarketProfilePage({
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Load supermarket data
-    const sm = getSupermarkets().find((s) => s.id === supermarketId);
-    setSupermarket(sm || null);
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        // Load supermarkets first
+        const supermarketsData = await getSupermarkets();
+        const supermarket = supermarketsData.find(
+          (s: Supermarket) => s.id === supermarketId
+        );
+        if (supermarket) {
+          setSupermarket(supermarket);
+        }
 
-    // Load all sales for this supermarket
-    const allSales = getSales();
-    const filteredSales = allSales.filter(
-      (sale) => sale.supermarketId === supermarketId
-    );
-    setSalesHistory(filteredSales);
+        // Get sales for this supermarket
+        const allSales = await getSales();
+        const filteredSales = allSales.filter(
+          (sale: Sale) => sale.supermarketId === supermarketId
+        );
+        setSalesHistory(filteredSales);
+      } catch (error) {
+        console.error("Error loading supermarket data:", error);
+        // If there's an error, try to load from localStorage
+        const localSupermarkets = storage.getSupermarkets();
+        const localSales = storage.getSales();
+
+        const localSupermarket = localSupermarkets.find(
+          (s: Supermarket) => s.id === supermarketId
+        );
+        if (localSupermarket) {
+          setSupermarket(localSupermarket);
+        }
+
+        const filteredLocalSales = localSales.filter(
+          (sale: Sale) => sale.supermarketId === supermarketId
+        );
+        setSalesHistory(filteredLocalSales);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
   }, [supermarketId]);
 
-  const handlePaymentUpdate = (saleId: string, isPaid: boolean) => {
-    updateSalePayment(saleId, isPaid);
-    // Reload the page to refresh all data
+  const handlePaymentUpdate = async (saleId: string, isPaid: boolean) => {
+    await updateSalePayment(saleId, isPaid);
     window.location.reload();
   };
 
@@ -1425,254 +1697,267 @@ function SupermarketProfilePage({
         <h1 className="text-xl font-bold ml-2">{supermarket?.name}</h1>
       </div>
 
-      {/* Supermarket Details Card */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="space-y-2">
-            <div>
-              <p className="text-sm text-muted-foreground">Adresse</p>
-              <p className="font-medium">{supermarket?.address}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Contact</p>
-              <p className="font-medium">{supermarket?.phone}</p>
-              <p className="text-sm">{supermarket?.email}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center p-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-muted-foreground">Chargement des données...</p>
+        </div>
+      ) : (
+        <>
+          {/* Supermarket Details Card */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="space-y-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Adresse</p>
+                  <p className="font-medium">{supermarket?.address}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Contact</p>
+                  <p className="font-medium">{supermarket?.phone}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Updated Statistics Card */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Ventes</p>
-              <p className="text-2xl font-bold">
-                {totalStats.totalQuantity} pièces
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                ({totalStats.totalCartons} cartons)
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Valeur Totale</p>
-              <p className="text-2xl font-bold">
-                {totalStats.totalValue.toLocaleString("fr-DZ")} DZD
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Updated Statistics Card */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Ventes</p>
+                  <p className="text-2xl font-bold">
+                    {totalStats.totalQuantity} pièces
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    ({totalStats.totalCartons} cartons)
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Valeur Totale</p>
+                  <p className="text-2xl font-bold">
+                    {totalStats.totalValue.toLocaleString("fr-DZ")} DZD
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Net Benefit Card */}
-      <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-md">Bénéfice Net</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">Total</p>
-              <p className="text-xl font-bold text-green-600">
-                {totalStats.totalNetBenefit.toLocaleString("fr-DZ")} DZD
-              </p>
-            </div>
-            <div className="text-sm text-muted-foreground">(25 DZD/unité)</div>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Net Benefit Card */}
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-md">Bénéfice Net</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="text-xl font-bold text-green-600">
+                    {totalStats.totalNetBenefit.toLocaleString("fr-DZ")} DZD
+                  </p>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  (25 DZD/unité)
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Monthly Benefits Card */}
-      <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-md">Bénéfices Mensuels</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="space-y-4">
-            {Object.entries(monthlyBenefits)
+          {/* Monthly Benefits Card */}
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-md">Bénéfices Mensuels</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="space-y-4">
+                {Object.entries(monthlyBenefits)
+                  .sort(
+                    (a, b) =>
+                      new Date(b[0]).getTime() - new Date(a[0]).getTime()
+                  )
+                  .map(([month, data]) => {
+                    const typedData = data as {
+                      quantity: number;
+                      value: number;
+                      netBenefit: number;
+                    };
+                    return (
+                      <div
+                        key={month}
+                        className="border-b last:border-0 pb-4 last:pb-0"
+                      >
+                        <div className="flex justify-between items-center">
+                          <p className="font-medium">{month}</p>
+                          <p className="text-green-600">
+                            {typedData.netBenefit.toLocaleString("fr-DZ")} DZD
+                          </p>
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {typedData.quantity} pièces (
+                          {Math.floor(typedData.quantity / 9)} cartons)
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment Status Card */}
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-md">État des Paiements</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-green-600">Payé</p>
+                  <p className="font-medium">
+                    {totalStats.totalPaid.toLocaleString("fr-DZ")} DZD
+                  </p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-red-600">Non Payé</p>
+                  <p className="font-medium">
+                    {totalStats.totalUnpaid.toLocaleString("fr-DZ")} DZD
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Updated Sales History */}
+          <div className="space-y-3 mt-4 relative">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-lg font-semibold text-gray-800">
+                Historique des Ventes
+              </h2>
+              <button
+                className="text-blue-600 flex items-center text-sm"
+                onClick={async () => {
+                  // Refresh data
+                  const allSales = await getSales();
+                  const filteredSales = allSales.filter(
+                    (sale: Sale) => sale.supermarketId === supermarketId
+                  );
+                  setSalesHistory(filteredSales);
+                }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 mr-1 animate-spin-slow"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                </svg>
+                Actualiser
+              </button>
+            </div>
+
+            {/* Sales history list with animations */}
+            {salesHistory
               .sort(
-                (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
+                (a, b) =>
+                  new Date(b.date).getTime() - new Date(a.date).getTime()
               )
-              .map(([month, data]) => {
-                const typedData = data as {
-                  quantity: number;
-                  value: number;
-                  netBenefit: number;
-                };
-                return (
-                  <div
-                    key={month}
-                    className="border-b last:border-0 pb-4 last:pb-0"
-                  >
-                    <div className="flex justify-between items-center">
-                      <p className="font-medium">{month}</p>
-                      <p className="text-green-600">
-                        {typedData.netBenefit.toLocaleString("fr-DZ")} DZD
+              .map((sale, index) => (
+                <div
+                  key={sale.id}
+                  className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm transition-all duration-300 cursor-pointer hover:shadow-md animate-in slide-in-from-bottom ${
+                    !sale.isPaid ? "border-red-200" : "border-green-200"
+                  }`}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                  onClick={() => {
+                    setSelectedSale(sale);
+                    setShowSaleModal(true);
+                  }}
+                >
+                  <div>
+                    <h3 className="font-medium">
+                      {new Date(sale.date).toLocaleDateString("fr-FR")}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Prix unitaire: {sale.pricePerUnit.toLocaleString("fr-DZ")}{" "}
+                      DZD
+                    </p>
+                    {sale.paymentDate && (
+                      <p className="text-xs text-green-600">
+                        Payé le{" "}
+                        {new Date(sale.paymentDate).toLocaleDateString("fr-FR")}
+                      </p>
+                    )}
+                    {!sale.isPaid && sale.expectedPaymentDate && (
+                      <p className="text-xs text-red-600">
+                        Paiement prévu le{" "}
+                        {new Date(sale.expectedPaymentDate).toLocaleDateString(
+                          "fr-FR"
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right flex items-center gap-2">
+                    <div>
+                      <p className="font-medium">
+                        {sale.totalValue.toLocaleString("fr-DZ")} DZD
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {sale.quantity} pièces ({sale.cartons} cartons)
                       </p>
                     </div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {typedData.quantity} pièces (
-                      {Math.floor(typedData.quantity / 9)} cartons)
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-blue-600 rounded-full border-blue-200 hover:bg-blue-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSale(sale);
+                          setShowInvoiceModal(true);
+                        }}
+                        title="Voir la facture"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                          <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                      </Button>
+                      {!sale.isPaid && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="ml-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePaymentUpdate(sale.id, true);
+                          }}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Payment Status Card */}
-      <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-md">État des Paiements</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-green-600">Payé</p>
-              <p className="font-medium">
-                {totalStats.totalPaid.toLocaleString("fr-DZ")} DZD
-              </p>
-            </div>
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-red-600">Non Payé</p>
-              <p className="font-medium">
-                {totalStats.totalUnpaid.toLocaleString("fr-DZ")} DZD
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Updated Sales History */}
-      <div className="space-y-3 mt-4 relative">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-semibold text-gray-800">
-            Historique des Ventes
-          </h2>
-          <button
-            className="text-blue-600 flex items-center text-sm"
-            onClick={() => {
-              // Refresh data
-              const allSales = getSales();
-              const filteredSales = allSales.filter(
-                (sale) => sale.supermarketId === supermarketId
-              );
-              setSalesHistory(filteredSales);
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4 mr-1 animate-spin-slow"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-            </svg>
-            Actualiser
-          </button>
-        </div>
-
-        {/* Sales history list with animations */}
-        {salesHistory
-          .sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-          )
-          .map((sale, index) => (
-            <div
-              key={sale.id}
-              className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm transition-all duration-300 cursor-pointer hover:shadow-md animate-in slide-in-from-bottom ${
-                !sale.isPaid ? "border-red-200" : "border-green-200"
-              }`}
-              style={{ animationDelay: `${index * 50}ms` }}
-              onClick={() => {
-                setSelectedSale(sale);
-                setShowSaleModal(true);
-              }}
-            >
-              <div>
-                <h3 className="font-medium">
-                  {new Date(sale.date).toLocaleDateString("fr-FR")}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Prix unitaire: {sale.pricePerUnit.toLocaleString("fr-DZ")} DZD
-                </p>
-                {sale.paymentDate && (
-                  <p className="text-xs text-green-600">
-                    Payé le{" "}
-                    {new Date(sale.paymentDate).toLocaleDateString("fr-FR")}
-                  </p>
-                )}
-                {!sale.isPaid && sale.expectedPaymentDate && (
-                  <p className="text-xs text-red-600">
-                    Paiement prévu le{" "}
-                    {new Date(sale.expectedPaymentDate).toLocaleDateString(
-                      "fr-FR"
-                    )}
-                  </p>
-                )}
-              </div>
-              <div className="text-right flex items-center gap-2">
-                <div>
-                  <p className="font-medium">
-                    {sale.totalValue.toLocaleString("fr-DZ")} DZD
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {sale.quantity} pièces ({sale.cartons} cartons)
-                  </p>
                 </div>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 text-blue-600 rounded-full border-blue-200 hover:bg-blue-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedSale(sale);
-                      setShowInvoiceModal(true);
-                    }}
-                    title="Voir la facture"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                      <line x1="16" y1="13" x2="8" y2="13"></line>
-                      <line x1="16" y1="17" x2="8" y2="17"></line>
-                      <polyline points="10 9 9 9 8 9"></polyline>
-                    </svg>
-                  </Button>
-                  {!sale.isPaid && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="ml-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePaymentUpdate(sale.id, true);
-                      }}
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-      </div>
+              ))}
+          </div>
+        </>
+      )}
 
       {/* Sale Details Modal */}
       {showSaleModal && selectedSale && (
@@ -1962,17 +2247,21 @@ function StockPage({ onBack }: StockPageProps) {
   const [stockHistory, setStockHistory] = useState<StockHistoryItem[]>([]);
   const [currentStock, setCurrentStock] = useState<number>(0);
 
-  // Load initial data
   useEffect(() => {
-    setStockHistory(getStockHistory());
-    setCurrentStock(getCurrentStock());
+    const loadData = async () => {
+      const [historyData, stockData] = await Promise.all([
+        getStockHistory(),
+        getCurrentStock(),
+      ]);
+      setStockHistory(historyData);
+      setCurrentStock(stockData);
+    };
+    loadData();
   }, []);
 
-  const handleAdjustStock = (e: React.FormEvent): void => {
+  const handleAdjustStock = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    const difference = newStock.cartons - currentStock;
-    updateStock(difference, "adjusted", "Ajustement manuel");
-    // Reload the page to refresh all data
+    await updateStock(newStock.cartons, "adjusted", "Ajustement manuel");
     window.location.reload();
   };
 
@@ -2019,7 +2308,7 @@ function StockPage({ onBack }: StockPageProps) {
         className="w-full h-14 rounded-xl font-medium bg-purple-600 hover:bg-purple-700 text-white shadow-md"
         onClick={() => setShowAdjustForm(true)}
       >
-        <Settings className="mr-2 h-5 w-5" />
+        <SettingsIcon className="mr-2 h-5 w-5" />
         Ajuster Stock
       </Button>
 
@@ -2112,44 +2401,55 @@ function StockPage({ onBack }: StockPageProps) {
         </h2>
         <div className="space-y-3">
           {stockHistory
-            .slice()
-            .reverse()
-            .map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm"
-              >
-                <div>
-                  <h3 className="font-medium text-gray-800">
-                    {new Date(item.date).toLocaleDateString("fr-FR")}
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {"type" in item && item.type === "adjusted"
-                      ? "Ajustement"
-                      : "type" in item && item.type === "removed"
-                      ? "Vente"
-                      : "Livraison"}
-                  </p>
+            .sort(
+              (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+            )
+            .map((item, index, array) => {
+              // Calculate the stock at this point in time
+              const stockAtThisPoint = array
+                .slice(0, array.length - index)
+                .reduce(
+                  (total, historyItem) => total + historyItem.quantity,
+                  0
+                );
+
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm"
+                >
+                  <div>
+                    <h3 className="font-medium text-gray-800">
+                      {new Date(item.date).toLocaleDateString("fr-FR")}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {"type" in item && item.type === "adjusted"
+                        ? "Ajustement"
+                        : "type" in item && item.type === "removed"
+                        ? "Vente"
+                        : "Livraison"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-base font-medium ${
+                        item.quantity > 0
+                          ? "text-green-600"
+                          : item.quantity < 0
+                          ? "text-red-600"
+                          : ""
+                      }`}
+                    >
+                      {item.quantity > 0 ? "+" : ""}
+                      {item.quantity} cartons
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Stock: {stockAtThisPoint} cartons
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p
-                    className={`text-base font-medium ${
-                      item.quantity > 0
-                        ? "text-green-600"
-                        : item.quantity < 0
-                        ? "text-red-600"
-                        : ""
-                    }`}
-                  >
-                    {item.quantity > 0 ? "+" : ""}
-                    {item.quantity} cartons
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Stock: {item.quantity + getCurrentStock()} cartons
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
         </div>
       </div>
     </div>
@@ -2174,37 +2474,47 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
     priceOption: "option1",
   });
   const [orders, setOrders] = useState<Order[]>([]);
+  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
 
   useEffect(() => {
-    setOrders(getOrders());
+    const loadData = async () => {
+      const [ordersData, supermarketsData] = await Promise.all([
+        getOrders(),
+        getSupermarkets(),
+      ]);
+      setOrders(ordersData);
+      setSupermarkets(supermarketsData);
+    };
+    loadData();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent): void => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    const selectedSupermarket = getSupermarkets().find(
-      (s) => s.id === newOrder.supermarketId
-    );
+    if (!selectedSupermarket) return;
 
-    if (selectedSupermarket) {
-      const unitsQuantity = newOrder.cartons * 9; // Convert cartons to units
-      const pricePerUnit = newOrder.priceOption === "option1" ? 180 : 166;
-      const order: Omit<Order, "id"> = {
+    const unitsQuantity = newOrder.cartons * 80;
+    const pricePerUnit = newOrder.priceOption === "option1" ? 180 : 166;
+
+    try {
+      const order = await addOrder({
         date: newOrder.date,
         supermarketId: newOrder.supermarketId,
-        supermarketName: selectedSupermarket.name,
+        // Remove supermarketName as it's not in the Order type
         quantity: unitsQuantity,
         pricePerUnit,
         status: "pending",
-      };
+        cartons: newOrder.cartons,
+        totalPrice: unitsQuantity * pricePerUnit,
+      });
 
-      addOrder(order);
-      // Reload the page to refresh all data
-      window.location.reload();
+      // ... rest of the function ...
+    } catch (error) {
+      console.error("Error adding order:", error);
     }
   };
-  const handleDelete = (id: string): void => {
-    deleteOrder(id);
-    // Reload the page to refresh all data
+
+  const handleDelete = async (id: string): Promise<void> => {
+    await deleteOrder(id);
     window.location.reload();
   };
 
@@ -2248,7 +2558,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
                 required
               >
                 <option value="">Sélectionner un supermarché</option>
-                {getSupermarkets().map((sm) => (
+                {supermarkets.map((sm) => (
                   <option key={sm.id} value={sm.id}>
                     {sm.name}
                   </option>
@@ -2404,65 +2714,58 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
         </Card>
       )}
 
-      <div className="space-y-3">
-        {orders.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">
-            <Calendar className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-            <p>Aucune commande planifiée</p>
-          </div>
-        ) : (
-          orders
-            .filter((order) => order.status === "pending") // Only show pending orders
-            .map((order) => {
-              const cartonsCount = Math.ceil(order.quantity / 9); // Calculate cartons from units
-
-              return (
-                <div
-                  key={order.id}
-                  className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm"
+      <div className="orders-list space-y-4 mt-6">
+        {orders.map((order) => (
+          <div
+            key={order.id}
+            className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm transition-all duration-300 ${
+              order.status === "pending"
+                ? "border-orange-200"
+                : order.status === "delivered"
+                ? "border-green-200"
+                : "border-red-200"
+            }`}
+          >
+            <div>
+              <h3 className="font-medium">
+                {new Date(order.date).toLocaleDateString("fr-FR")}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {/* Find and display supermarket name based on ID */}
+                {supermarkets.find((s) => s.id === order.supermarketId)?.name ||
+                  "Supermarché non trouvé"}
+              </p>
+            </div>
+            <div className="text-right flex items-center">
+              <div>
+                <p className="font-medium text-gray-800">
+                  {order.quantity} pièces
+                </p>
+                <p className="text-xs text-gray-500">{order.cartons} cartons</p>
+              </div>
+              <div className="flex space-x-1 ml-4">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 text-green-600 rounded-full border-green-200 hover:bg-green-50"
+                  onClick={() => onCompleteOrder(order)}
+                  title="Transformer en vente"
                 >
-                  <div>
-                    <h3 className="font-medium text-gray-800">
-                      {new Date(order.date).toLocaleDateString("fr-FR")}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {order.supermarketName}
-                    </p>
-                  </div>
-                  <div className="text-right flex items-center">
-                    <div>
-                      <p className="font-medium text-gray-800">
-                        {cartonsCount} cartons
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {order.quantity} pièces
-                      </p>
-                    </div>
-                    <div className="flex space-x-1 ml-4">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-green-600 rounded-full border-green-200 hover:bg-green-50"
-                        onClick={() => onCompleteOrder(order)}
-                        title="Transformer en vente"
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-red-600 rounded-full border-red-200 hover:bg-red-50"
-                        onClick={() => handleDelete(order.id)}
-                        title="Supprimer la commande"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-        )}
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 text-red-600 rounded-full border-red-200 hover:bg-red-50"
+                  onClick={() => handleDelete(order.id)}
+                  title="Supprimer la commande"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -2483,7 +2786,7 @@ function ClearDataButton() {
         onClick={() => setShowConfirmation(true)}
         className="fixed bottom-20 right-4 bg-white hover:bg-gray-50 border-gray-200 text-gray-600 shadow-sm rounded-full h-10 w-10 flex items-center justify-center"
       >
-        <Settings className="h-5 w-5" />
+        <SettingsIcon className="h-5 w-5" />
       </Button>
 
       {showConfirmation && (

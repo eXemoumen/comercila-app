@@ -20,6 +20,13 @@ export interface Sale {
   paymentNote?: string;
   payments: Payment[];
   remainingAmount: number;
+  note?: string;
+  orderId?: string;
+}
+
+export interface ContactNumber {
+  number: string;
+  personName?: string;
 }
 
 export interface Supermarket {
@@ -27,7 +34,6 @@ export interface Supermarket {
   name: string;
   address: string;
   phone: string;
-  email?: string;
   totalSales: number;
   totalValue: number;
   location: {
@@ -38,19 +44,28 @@ export interface Supermarket {
 }
 
 export interface Stock {
-  id: string;
-  date: string;
-  type: 'added' | 'removed' | 'adjusted';
-  quantity: number;
-  currentStock: number;
+  id: number;
+  current_stock: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Order {
   id: string;
-  date: string;
   supermarketId: string;
-  supermarketName: string;
   quantity: number;
-  status: "pending" | "delivered" | "cancelled";
-  pricePerUnit: number;
+  status: 'pending' | 'delivered' | 'cancelled';
+  date: string;
+  note?: string;
+  cartons?: number;
+  totalPrice?: number;
+  pricePerUnit?: number;
+}
+
+export interface StockHistory {
+  id: string;
+  quantity: number;
+  type: 'in' | 'out';
+  date: string;
+  reason: string;
 } 

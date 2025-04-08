@@ -1,99 +1,107 @@
-// Types
-interface Sale {
-  id: string;
-  date: string;
-  supermarketId: string;
-  quantity: number;
-  cartons: number;
-  pricePerUnit: number;
-  totalValue: number;
-  isPaid: boolean;
-  paymentDate?: string;
-  paymentNote?: string;
-  expectedPaymentDate?: string;
-  payments: Payment[];
-  remainingAmount: number;
-  fromOrder?: boolean;
-}
+import { type Supermarket, type Sale, type Order, type StockHistory, type Payment } from '@/types/index';
 
-interface Supermarket {
-  id: string;
-  name: string;
-  address: string;
-  phone: string;
-  email?: string;
-  totalSales: number;
-  totalValue: number;
-  location: {
-    lat: number;
-    lng: number;
-    formattedAddress: string;
-  };
-}
+export const STORAGE_KEYS = {
+  SUPERMARKETS: 'supermarkets',
+  SALES: 'sales',
+  ORDERS: 'orders',
+  CURRENT_STOCK: 'currentStock',
+  STOCK_HISTORY: 'stockHistory'
+} as const;
 
-interface Stock {
-  id: string;
-  date: string;
-  type: 'added' | 'removed' | 'adjusted';
-  quantity: number;
-  currentStock: number;
-  reason: string;
-}
-
-interface Order {
-  id: string;
-  date: string;
-  supermarketId: string;
-  supermarketName: string;
-  quantity: number;
-  status: "pending" | "delivered" | "cancelled";
-  pricePerUnit: number;
-}
-
-interface Payment {
-  id: string;
-  date: string;
-  amount: number;
-  note?: string;
-}
-
-// Storage Keys
-const SALES_KEY = 'soap_sales';
-const SUPERMARKETS_KEY = 'soap_supermarkets';
-const STOCK_KEY = 'soap_stock';
-const CURRENT_STOCK_KEY = 'soap_current_stock';
-const ORDERS_KEY = 'soap_orders';
-
-// Sales CRUD
-export const getSales = (): Sale[] => {
-  if (typeof window === 'undefined') return [];
-  const sales = localStorage.getItem(SALES_KEY);
-  return sales ? JSON.parse(sales) : [];
+export const getFromStorage = <T>(key: string): T | null => {
+  if (typeof window === 'undefined') return null;
+  const data = localStorage.getItem(key);
+  return data ? JSON.parse(data) : null;
 };
 
-export const addSale = (saleData: Omit<Sale, 'id'>) => {
-  if (typeof window === 'undefined') return null;
-  const sales = getSales();
-  const newSale = {
-    ...saleData,
-    id: Date.now().toString(),
+export const setInStorage = <T>(key: string, data: T): void => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(key, JSON.stringify(data));
+};
+
+export const getSupermarkets = (): Supermarket[] => {
+  return getFromStorage<Supermarket[]>(STORAGE_KEYS.SUPERMARKETS) || [];
+};
+
+export const addSupermarket = (supermarket: Omit<Supermarket, 'id' | 'totalSales' | 'totalValue'>): Supermarket => {
+  const supermarkets = getSupermarkets();
+  const newSupermarket: Supermarket = {
+    ...supermarket,
+    id: crypto.randomUUID(),
+    totalSales: 0,
+    totalValue: 0
   };
-  sales.push(newSale);
-  localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+  setInStorage(STORAGE_KEYS.SUPERMARKETS, [...supermarkets, newSupermarket]);
+  return newSupermarket;
+};
 
-  // Update supermarket stats
-  updateSupermarketStats(saleData.supermarketId, saleData.quantity, saleData.totalValue);
+export const updateSupermarket = (id: string, updates: Partial<Supermarket>): Supermarket | null => {
+  const supermarkets = getSupermarkets();
+  const index = supermarkets.findIndex(s => s.id === id);
+  if (index === -1) return null;
+  
+  const updatedSupermarket = {
+    ...supermarkets[index],
+    ...updates
+  };
+  supermarkets[index] = updatedSupermarket;
+  setInStorage(STORAGE_KEYS.SUPERMARKETS, supermarkets);
+  return updatedSupermarket;
+};
 
+export const getSales = (): Sale[] => {
+  return getFromStorage<Sale[]>(STORAGE_KEYS.SALES) || [];
+};
+
+export const addSale = (sale: Omit<Sale, 'id' | 'payments' | 'remainingAmount'>): Sale => {
+  const sales = getSales();
+  const newSale: Sale = {
+    ...sale,
+    id: crypto.randomUUID(),
+    payments: [],
+    remainingAmount: sale.totalValue
+  };
+  setInStorage(STORAGE_KEYS.SALES, [...sales, newSale]);
   return newSale;
 };
 
-// Supermarkets CRUD
-export const getSupermarkets = (): Supermarket[] => {
-  if (typeof window === 'undefined') return [];
-  const supermarkets = localStorage.getItem(SUPERMARKETS_KEY);
-  return supermarkets ? JSON.parse(supermarkets) : [];
+export const getOrders = (): Order[] => {
+  return getFromStorage<Order[]>(STORAGE_KEYS.ORDERS) || [];
 };
 
+export const addOrder = (order: Omit<Order, 'id'>): Order => {
+  const orders = getOrders();
+  const newOrder: Order = {
+    ...order,
+    id: crypto.randomUUID()
+  };
+  setInStorage(STORAGE_KEYS.ORDERS, [...orders, newOrder]);
+  return newOrder;
+};
+
+export const getCurrentStock = (): number => {
+  return getFromStorage<number>(STORAGE_KEYS.CURRENT_STOCK) || 0;
+};
+
+export const updateCurrentStock = (quantity: number): void => {
+  setInStorage(STORAGE_KEYS.CURRENT_STOCK, quantity);
+};
+
+export const getStockHistory = (): StockHistory[] => {
+  return getFromStorage<StockHistory[]>(STORAGE_KEYS.STOCK_HISTORY) || [];
+};
+
+export const addStockHistory = (history: Omit<StockHistory, 'id'>): StockHistory => {
+  const historyList = getStockHistory();
+  const newHistory: StockHistory = {
+    ...history,
+    id: crypto.randomUUID()
+  };
+  setInStorage(STORAGE_KEYS.STOCK_HISTORY, [...historyList, newHistory]);
+  return newHistory;
+};
+
+// Supermarkets CRUD
 export const updateSupermarketStats = (id: string, quantity: number, totalValue: number) => {
   if (typeof window === 'undefined') return;
   const supermarkets = getSupermarkets();
@@ -101,93 +109,43 @@ export const updateSupermarketStats = (id: string, quantity: number, totalValue:
   if (index !== -1) {
     supermarkets[index].totalSales += quantity;
     supermarkets[index].totalValue += totalValue;
-    localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
+    setInStorage(STORAGE_KEYS.SUPERMARKETS, supermarkets);
   }
 };
 
-export const addSupermarket = (supermarket: Omit<Supermarket, 'id' | 'totalSales' | 'totalValue'>) => {
-  if (typeof window === 'undefined') return null;
-  const supermarkets = getSupermarkets();
-  const newSupermarket = {
-    ...supermarket,
-    id: Date.now().toString(),
-    totalSales: 0,
-    totalValue: 0,
-    location: supermarket.location || {
-      lat: 36.7538,
-      lng: 3.0588,
-      formattedAddress: supermarket.address
-    }
-  };
-  supermarkets.push(newSupermarket);
-  localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
-  return newSupermarket;
-};
-
 // Stock CRUD
-export const getCurrentStock = (): number => {
-  if (typeof window === 'undefined') return 0;
-  const stock = localStorage.getItem(CURRENT_STOCK_KEY);
-  return stock ? parseInt(stock) : 0;
-};
-
-export const getStockHistory = (): Stock[] => {
-  if (typeof window === 'undefined') return [];
-  const history = localStorage.getItem(STOCK_KEY);
-  return history ? JSON.parse(history) : [];
-};
-
-export const updateStock = (quantity: number, type: Stock['type'], reason: string) => {
+export const updateStock = (quantity: number, type: 'in' | 'out', reason: string) => {
   if (typeof window === 'undefined') return 0;
   const currentStock = getCurrentStock();
-  const newStock = currentStock + quantity;
+  const newStock = currentStock + (type === 'in' ? quantity : -quantity);
 
   // Update current stock
-  localStorage.setItem(CURRENT_STOCK_KEY, newStock.toString());
+  setInStorage(STORAGE_KEYS.CURRENT_STOCK, newStock);
 
   // Add to history
   const stockHistory = getStockHistory();
-  stockHistory.push({
+  const newHistory: StockHistory = {
     id: Date.now().toString(),
     date: new Date().toISOString(),
     type,
     quantity,
-    currentStock: newStock,
     reason
-  });
-  localStorage.setItem(STOCK_KEY, JSON.stringify(stockHistory));
+  };
+  stockHistory.push(newHistory);
+  setInStorage(STORAGE_KEYS.STOCK_HISTORY, stockHistory);
 
   return newStock;
 };
 
 // Orders CRUD
-export const getOrders = (): Order[] => {
-  if (typeof window === 'undefined') return [];
-  const orders = localStorage.getItem(ORDERS_KEY);
-  return orders ? JSON.parse(orders) : [];
-};
-
-export const addOrder = (order: Omit<Order, 'id' | 'status'>) => {
+export const deleteOrder = (id: string) => {
   if (typeof window === 'undefined') return null;
   const orders = getOrders();
-  const newOrder = {
-    ...order,
-    id: Date.now().toString(),
-    status: 'pending' as const
-  };
-  orders.push(newOrder);
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-  return newOrder;
+  const filteredOrders = orders.filter(o => o.id !== id);
+  setInStorage(STORAGE_KEYS.ORDERS, filteredOrders);
+  return true;
 };
 
-export const deleteOrder = (id: string) => {
-  if (typeof window === 'undefined') return;
-  const orders = getOrders();
-  const filteredOrders = orders.filter(order => order.id !== id);
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(filteredOrders));
-};
-
-// Add function to complete an order
 export const completeOrder = (orderId: string) => {
   if (typeof window === 'undefined') return null;
   const orders = getOrders();
@@ -197,19 +155,18 @@ export const completeOrder = (orderId: string) => {
     const order = orders[orderIndex];
     orders[orderIndex] = {
       ...order,
-      status: 'delivered'
+      status: 'delivered' as const
     };
-    localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+    setInStorage(STORAGE_KEYS.ORDERS, orders);
 
     // Update supermarket stats when order is completed
-    updateSupermarketStats(order.supermarketId, order.quantity, order.quantity * order.pricePerUnit);
+    updateSupermarketStats(order.supermarketId, order.quantity, 0);
 
     return orders[orderIndex];
   }
   return null;
 };
 
-// Add function to update payment status
 export const updateSalePayment = (saleId: string, isPaid: boolean) => {
   if (typeof window === 'undefined') return null;
   const sales = getSales();
@@ -221,7 +178,7 @@ export const updateSalePayment = (saleId: string, isPaid: boolean) => {
       isPaid,
       paymentDate: isPaid ? new Date().toISOString() : undefined
     };
-    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+    setInStorage(STORAGE_KEYS.SALES, sales);
     return sales[saleIndex];
   }
   return null;
@@ -249,7 +206,7 @@ export const addPayment = (saleId: string, payment: Omit<Payment, 'id'>) => {
       paymentDate: newRemainingAmount <= 0 ? new Date().toISOString() : undefined
     };
 
-    localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+    setInStorage(STORAGE_KEYS.SALES, sales);
     return sales[saleIndex];
   }
   return null;

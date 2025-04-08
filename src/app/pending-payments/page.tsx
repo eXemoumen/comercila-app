@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, ChevronLeft, Plus, X } from "lucide-react";
-import type { Sale, Payment } from "@/types/index";
-import { getSupermarkets, addPayment } from "@/utils/storage";
+import { getSales, addPayment, getSupermarkets } from "@/utils/database";
+import type { Sale, Supermarket } from "@/types/index";
 
 export default function PendingPaymentsPage() {
   const router = useRouter();
@@ -15,19 +15,21 @@ export default function PendingPaymentsPage() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState("");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
 
   useEffect(() => {
-    const salesData = localStorage.getItem("soap_sales");
-    if (salesData) {
-      try {
-        const allSales = JSON.parse(salesData) as Sale[];
-        const unpaidSales = allSales.filter((sale) => !sale.isPaid);
-        setPendingSales(unpaidSales);
-      } catch (error) {
-        console.error("Error loading sales:", error);
-        setPendingSales([]);
-      }
-    }
+    const loadData = async () => {
+      const [salesData, supermarketsData] = await Promise.all([
+        getSales(),
+        getSupermarkets(),
+      ]);
+
+      const unpaidSales = salesData.filter((sale) => !sale.isPaid);
+      setPendingSales(unpaidSales);
+      setSupermarkets(supermarketsData);
+    };
+
+    loadData();
   }, []);
 
   // Calculate total remaining amount safely
@@ -42,20 +44,27 @@ export default function PendingPaymentsPage() {
     setShowPaymentModal(true);
   };
 
-  const handleSubmitPayment = () => {
+  const handleSubmitPayment = async () => {
     if (!selectedSale || paymentAmount <= 0) return;
 
-    const payment: Payment = {
-      id: Date.now().toString(),
+    const payment = {
       date: new Date().toISOString(),
       amount: paymentAmount,
       note: paymentNote,
     };
 
-    addPayment(selectedSale.id, payment);
+    await addPayment(selectedSale.id, payment);
 
-    // Reload the page to refresh all data
-    window.location.reload();
+    // Refresh the data
+    const [salesData] = await Promise.all([getSales()]);
+    const unpaidSales = salesData.filter((sale) => !sale.isPaid);
+    setPendingSales(unpaidSales);
+
+    // Close modal and reset state
+    setShowPaymentModal(false);
+    setSelectedSale(null);
+    setPaymentAmount(0);
+    setPaymentNote("");
   };
 
   const handleBack = () => {
@@ -110,7 +119,7 @@ export default function PendingPaymentsPage() {
           pendingSales.map((sale) => {
             const remainingAmount = sale.remainingAmount || 0;
             const totalValue = sale.totalValue || 0;
-            const supermarket = getSupermarkets().find(
+            const supermarket = supermarkets.find(
               (sm) => sm.id === sale.supermarketId
             );
 
