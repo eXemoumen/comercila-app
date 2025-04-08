@@ -2,14 +2,60 @@
 
 import type { Sale } from "../types/index";
 import { Button } from "@/components/ui/button";
-import { X, Mail, Printer, Share2 } from "lucide-react";
-import { useState } from "react";
+import { X, Mail, Printer, Share2, Download } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface InvoiceModalProps {
   sale: Sale;
   supermarketName: string;
   onClose: () => void;
 }
+
+// Function to generate and retrieve invoice numbers
+const getInvoiceNumber = (): string => {
+  if (typeof window === "undefined") return "BL-001";
+
+  // Get the current date in YYMMDD format
+  const today = new Date();
+  const year = today.getFullYear().toString().slice(-2);
+  const month = (today.getMonth() + 1).toString().padStart(2, "0");
+  const day = today.getDate().toString().padStart(2, "0");
+  const datePrefix = `${year}${month}${day}`;
+
+  // Get the current counter from localStorage
+  const INVOICE_COUNTER_KEY = "invoice_counter";
+  const counterObj = localStorage.getItem(INVOICE_COUNTER_KEY);
+  let counter = 1;
+  let lastDateUsed = "";
+
+  if (counterObj) {
+    const parsed = JSON.parse(counterObj);
+    lastDateUsed = parsed.date || "";
+    counter = parsed.count || 1;
+
+    // Reset counter if it's a new day
+    if (lastDateUsed !== datePrefix) {
+      counter = 1;
+    } else {
+      counter++;
+    }
+  }
+
+  // Save the updated counter
+  localStorage.setItem(
+    INVOICE_COUNTER_KEY,
+    JSON.stringify({
+      date: datePrefix,
+      count: counter,
+    })
+  );
+
+  // Format the invoice number
+  const counterStr = counter.toString().padStart(3, "0");
+  return `BL-${datePrefix}-${counterStr}`;
+};
 
 export function InvoiceModal({
   sale,
@@ -19,9 +65,56 @@ export function InvoiceModal({
   const [sending, setSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState<string>("");
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  // Ref for the invoice content that will be turned into PDF
+  const invoiceRef = useRef<HTMLDivElement>(null);
+
+  // Generate invoice number when component mounts
+  useEffect(() => {
+    setInvoiceNumber(getInvoiceNumber());
+  }, []);
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const generatePdf = async () => {
+    if (!invoiceRef.current) return;
+
+    setGeneratingPdf(true);
+
+    try {
+      // Create a clone of the invoice element to manipulate for PDF conversion
+      const invoice = invoiceRef.current;
+
+      // Use html2canvas to convert the element to an image
+      const canvas = await html2canvas(invoice, {
+        scale: 2, // Higher scale for better quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      // Calculate dimensions
+      const imgData = canvas.toDataURL("image/png");
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Create PDF in A4 format
+      const pdf = new jsPDF("p", "mm", "a4");
+
+      // Add image to PDF
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+
+      // Save the PDF
+      pdf.save(`bon_livraison_${invoiceNumber}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   const handleSendEmail = async () => {
@@ -58,7 +151,7 @@ export function InvoiceModal({
     const invoiceDate = new Date(sale.date).toLocaleDateString("fr-FR");
 
     const message =
-      `*FACTURE N° ${sale.id}*\n` +
+      `*BON DE LIVRAISON N° ${invoiceNumber}*\n` +
       `Date: ${invoiceDate}\n` +
       `Client: ${supermarketName}\n` +
       `Détails: ${sale.quantity} pièces × ${sale.pricePerUnit.toLocaleString(
@@ -85,7 +178,7 @@ export function InvoiceModal({
     const invoiceDate = new Date(sale.date).toLocaleDateString("fr-FR");
 
     const message =
-      `FACTURE N° ${sale.id}\n` +
+      `BON DE LIVRAISON N° ${invoiceNumber}\n` +
       `Date: ${invoiceDate}\n` +
       `Client: ${supermarketName}\n` +
       `Détails: ${sale.quantity} pièces × ${sale.pricePerUnit.toLocaleString(
@@ -109,7 +202,7 @@ export function InvoiceModal({
       <div className="bg-white w-full max-w-md mx-4 rounded-lg shadow-xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-xl font-bold">Facture</h2>
+          <h2 className="text-xl font-bold">Bon de livraison</h2>
           <Button
             variant="ghost"
             size="icon"
@@ -122,11 +215,11 @@ export function InvoiceModal({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-4">
+          <div ref={invoiceRef} className="space-y-4 bg-white">
             {/* Invoice Header */}
             <div className="text-center">
-              <h1 className="text-2xl font-bold">FACTURE</h1>
-              <p className="text-gray-600">N° {sale.id}</p>
+              <h1 className="text-2xl font-bold">BON DE LIVRAISON</h1>
+              <p className="text-gray-600">N° {invoiceNumber}</p>
               <p className="text-gray-600">
                 Date: {new Date(sale.date).toLocaleDateString("fr-FR")}
               </p>
@@ -216,20 +309,23 @@ export function InvoiceModal({
         </div>
 
         {/* Footer with Buttons */}
-        <div className="p-4 border-t bg-white">
+        <div className="p-4 border-t bg-white relative">
           {sendSuccess && (
             <div className="mb-3 bg-green-100 text-green-800 px-3 py-2 rounded-md text-sm">
-              Facture envoyée avec succès !
+              Bon de livraison envoyé avec succès !
             </div>
           )}
 
-          {/* Share options dropdown */}
+          {/* Share options dropdown - positioned relative to the footer */}
           {showShareOptions && (
-            <div className="absolute bottom-[70px] right-4 bg-white shadow-lg rounded-md border p-2 w-48">
-              <div className="flex flex-col space-y-2">
+            <div className="absolute bottom-16 right-4 bg-white shadow-xl rounded-lg border p-3 w-56 z-10">
+              <h3 className="text-sm font-medium text-gray-700 mb-2 border-b pb-1">
+                Partager via
+              </h3>
+              <div className="flex flex-col space-y-1">
                 <Button
                   variant="ghost"
-                  className="justify-start text-green-600 hover:bg-green-50 hover:text-green-700"
+                  className="justify-start text-green-600 hover:bg-green-50 hover:text-green-700 rounded-md h-10"
                   onClick={handleWhatsAppShare}
                 >
                   <svg
@@ -243,7 +339,7 @@ export function InvoiceModal({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                  className="justify-start text-purple-600 hover:bg-purple-50 hover:text-purple-700 rounded-md h-10"
                   onClick={handleViberShare}
                 >
                   <svg
@@ -257,7 +353,7 @@ export function InvoiceModal({
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                  className="justify-start text-blue-600 hover:bg-blue-50 hover:text-blue-700 rounded-md h-10"
                   onClick={handleSendEmail}
                 >
                   <Mail className="w-5 h-5 mr-2" />
@@ -267,7 +363,7 @@ export function InvoiceModal({
             </div>
           )}
 
-          <div className="flex justify-end space-x-3">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               onClick={onClose}
               variant="outline"
@@ -282,6 +378,43 @@ export function InvoiceModal({
             >
               <Printer className="h-4 w-4 mr-1" />
               Imprimer
+            </Button>
+            <Button
+              onClick={generatePdf}
+              variant="outline"
+              className="border-gray-300"
+              disabled={generatingPdf}
+            >
+              {generatingPdf ? (
+                <div className="flex items-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  PDF...
+                </div>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-1" />
+                  PDF
+                </>
+              )}
             </Button>
             <Button
               onClick={() => setShowShareOptions(!showShareOptions)}

@@ -2728,68 +2728,6 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Option de Prix
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant={
-                    newOrder.priceOption === "option1" ? "default" : "outline"
-                  }
-                  className={`w-full rounded-xl py-3 px-4 h-auto ${
-                    newOrder.priceOption === "option1"
-                      ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
-                      : "bg-white hover:bg-gray-50 border-gray-200"
-                  }`}
-                  onClick={() =>
-                    setNewOrder((prev) => ({ ...prev, priceOption: "option1" }))
-                  }
-                >
-                  <div className="text-left">
-                    <div className="font-medium text-base">180 DZD</div>
-                    <div
-                      className={`text-xs ${
-                        newOrder.priceOption === "option1"
-                          ? "text-blue-100"
-                          : "text-gray-500"
-                      }`}
-                    >
-                      Bénéfice: 25 DZD/unité
-                    </div>
-                  </div>
-                </Button>
-                <Button
-                  type="button"
-                  variant={
-                    newOrder.priceOption === "option2" ? "default" : "outline"
-                  }
-                  className={`w-full rounded-xl py-3 px-4 h-auto ${
-                    newOrder.priceOption === "option2"
-                      ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
-                      : "bg-white hover:bg-gray-50 border-gray-200"
-                  }`}
-                  onClick={() =>
-                    setNewOrder((prev) => ({ ...prev, priceOption: "option2" }))
-                  }
-                >
-                  <div className="text-left">
-                    <div className="font-medium text-base">180 DZD</div>
-                    <div
-                      className={`text-xs ${
-                        newOrder.priceOption === "option2"
-                          ? "text-blue-100"
-                          : "text-gray-500"
-                      }`}
-                    >
-                      Retour: 163 DZD/unité
-                    </div>
-                  </div>
-                </Button>
-              </div>
-            </div>
-
             <div className="flex space-x-3 pt-2">
               <Button
                 type="submit"
