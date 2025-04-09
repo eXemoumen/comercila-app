@@ -21,6 +21,7 @@ export interface Sale {
   remainingAmount: number;
   fromOrder?: boolean;
   note?: string;
+  fragranceDistribution?: Record<string, number>;
 }
 
 export interface Supermarket {
@@ -68,6 +69,20 @@ export interface StockHistory {
   quantity: number;
   currentStock: number;
   reason: string;
+  fragranceDistribution?: Record<string, number>;
+}
+
+export interface Fragrance {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface FragranceStock {
+  fragranceId: string;
+  name: string;
+  quantity: number;
+  color: string;
 }
 
 export interface CurrentStock {
@@ -75,4 +90,5 @@ export interface CurrentStock {
   productId: string;
   quantity: number;
   updatedAt: string;
+  fragranceStock: FragranceStock[];
 } 

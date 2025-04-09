@@ -42,6 +42,7 @@ export interface Stock {
   quantity: number;
   currentStock: number;
   reason: string;
+  fragranceDistribution?: Record<string, number>;
 }
 
 export interface Order {
@@ -67,6 +68,20 @@ const SUPERMARKETS_KEY = 'soap_supermarkets';
 const STOCK_KEY = 'soap_stock';
 const CURRENT_STOCK_KEY = 'soap_current_stock';
 const ORDERS_KEY = 'soap_orders';
+const FRAGRANCES_KEY = 'soap_fragrances';
+const FRAGRANCE_STOCK_KEY = 'soap_fragrance_stock';
+
+// Default fragrances
+const DEFAULT_FRAGRANCES = [
+  { id: '1', name: 'Lavande', color: '#9F7AEA' },
+  { id: '2', name: 'Rose', color: '#F687B3' },
+  { id: '3', name: 'Citron', color: '#FBBF24' },
+  { id: '4', name: 'Fraîcheur Marine', color: '#60A5FA' },
+  { id: '5', name: 'Vanille', color: '#F59E0B' },
+  { id: '6', name: 'Grenade', color: '#F97316' },
+  { id: '7', name: 'Jasmin', color: '#10B981' },
+  { id: '8', name: 'Amande', color: '#8B5CF6' },
+];
 
 // Sales CRUD
 export const getSales = (): Sale[] => {
@@ -163,13 +178,28 @@ export const getStockHistory = (): Stock[] => {
   return history ? JSON.parse(history) : [];
 };
 
-export const updateStock = (quantity: number, type: Stock['type'], reason: string) => {
+export const updateStock = (
+  quantity: number, 
+  type: Stock['type'], 
+  reason: string, 
+  fragranceDistribution?: Record<string, number>
+) => {
   if (typeof window === 'undefined') return 0;
   const currentStock = getCurrentStock();
   const newStock = currentStock + quantity;
 
   // Update current stock
   localStorage.setItem(CURRENT_STOCK_KEY, newStock.toString());
+
+  // Update fragrance stock if distribution is provided
+  if (fragranceDistribution) {
+    Object.entries(fragranceDistribution).forEach(([fragranceId, qty]) => {
+      // If we're removing stock (negative quantity), we need to subtract the fragrance amounts
+      // If we're adding stock (positive quantity), we need to add the fragrance amounts
+      const adjustedQty = quantity < 0 ? -qty : qty;
+      updateFragranceStock(fragranceId, adjustedQty);
+    });
+  }
 
   // Add to history
   const stockHistory = getStockHistory();
@@ -179,7 +209,8 @@ export const updateStock = (quantity: number, type: Stock['type'], reason: strin
     type,
     quantity,
     currentStock: newStock,
-    reason
+    reason,
+    fragranceDistribution
   });
   localStorage.setItem(STOCK_KEY, JSON.stringify(stockHistory));
 
@@ -293,4 +324,81 @@ export const setSale = (sale: Sale): Sale => {
     localStorage.setItem(SALES_KEY, JSON.stringify(sales));
   }
   return sale;
+};
+
+// Fragrance Management
+interface Fragrance {
+  id: string;
+  name: string;
+  color: string;
+}
+
+interface FragranceStock {
+  fragranceId: string;
+  name: string;
+  quantity: number;
+  color: string;
+}
+
+export const getFragrances = (): Fragrance[] => {
+  if (typeof window === 'undefined') return DEFAULT_FRAGRANCES;
+  
+  const fragrances = localStorage.getItem(FRAGRANCES_KEY);
+  if (!fragrances) {
+    localStorage.setItem(FRAGRANCES_KEY, JSON.stringify(DEFAULT_FRAGRANCES));
+    return DEFAULT_FRAGRANCES;
+  }
+  
+  return JSON.parse(fragrances);
+};
+
+export const getFragranceStock = (): FragranceStock[] => {
+  if (typeof window === 'undefined') return [];
+  
+  const fragranceStock = localStorage.getItem(FRAGRANCE_STOCK_KEY);
+  if (!fragranceStock) {
+    // Initialize with empty stock for each fragrance
+    const fragrances = getFragrances();
+    const initialStock = fragrances.map((fragrance: Fragrance) => ({
+      fragranceId: fragrance.id,
+      name: fragrance.name,
+      quantity: 0,
+      color: fragrance.color
+    }));
+    
+    localStorage.setItem(FRAGRANCE_STOCK_KEY, JSON.stringify(initialStock));
+    return initialStock;
+  }
+  
+  return JSON.parse(fragranceStock);
+};
+
+export const updateFragranceStock = (fragranceId: string, quantity: number) => {
+  if (typeof window === 'undefined') return null;
+  
+  const fragranceStock = getFragranceStock();
+  const index = fragranceStock.findIndex((item: FragranceStock) => item.fragranceId === fragranceId);
+  
+  if (index !== -1) {
+    fragranceStock[index].quantity += quantity;
+    localStorage.setItem(FRAGRANCE_STOCK_KEY, JSON.stringify(fragranceStock));
+    return fragranceStock[index];
+  }
+  
+  return null;
+};
+
+export const setFragranceStock = (fragranceId: string, newQuantity: number) => {
+  if (typeof window === 'undefined') return null;
+  
+  const fragranceStock = getFragranceStock();
+  const index = fragranceStock.findIndex((item: FragranceStock) => item.fragranceId === fragranceId);
+  
+  if (index !== -1) {
+    fragranceStock[index].quantity = newQuantity;
+    localStorage.setItem(FRAGRANCE_STOCK_KEY, JSON.stringify(fragranceStock));
+    return fragranceStock[index];
+  }
+  
+  return null;
 }; 

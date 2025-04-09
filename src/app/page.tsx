@@ -17,10 +17,13 @@ import {
   updateSupermarket,
   deleteOrder,
   addPayment,
+  getFragranceStock,
+  getFragrances,
 } from "@/utils/storage";
-import type { Sale, Order, Supermarket } from "@/types/index";
+import type { Sale, Order, Supermarket, FragranceStock } from "@/types/index";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Calendar,
   Home,
@@ -84,6 +87,8 @@ interface StockHistoryItem {
   quantity: number;
   type?: "added" | "removed" | "adjusted";
   reason?: string;
+  currentStock?: number;
+  fragranceDistribution?: Record<string, number>;
 }
 
 // Add this interface near the top with other interfaces
@@ -876,6 +881,25 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
   const [saleDate, setSaleDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  // Set showFragranceForm to true by default since it's now mandatory
+  const [fragranceStock, setFragranceStock] = useState<FragranceStock[]>([]);
+  const [fragranceDistribution, setFragranceDistribution] = useState<
+    Record<string, number>
+  >({});
+
+  // Load fragrance data
+  useEffect(() => {
+    setFragranceStock(getFragranceStock());
+
+    // Initialize fragrance distribution
+    const initialDistribution: Record<string, number> = {};
+    getFragrances().forEach(
+      (fragrance: { id: string; name: string; color: string }) => {
+        initialDistribution[fragrance.id] = 0;
+      }
+    );
+    setFragranceDistribution(initialDistribution);
+  }, []);
 
   // Calculate quantity based on cartons (9 pieces per carton)
   const quantity = cartons * 9;
@@ -889,10 +913,10 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       label: "Option 1 (180 DZD)",
     },
     option2: {
-      pricePerUnit: 166,
+      pricePerUnit: 180,
       benefitPerUnit: 17,
-      costToSupplier: 149,
-      label: "Option 2 (166 DZD)",
+      costToSupplier: 163,
+      label: "Option 2 (180 DZD)",
     },
   };
 
@@ -901,8 +925,40 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
   const totalBenefit = quantity * selectedPrice.benefitPerUnit;
   const totalCostToSupplier = quantity * selectedPrice.costToSupplier;
 
+  const handleFragranceChange = (fragranceId: string, value: number): void => {
+    setFragranceDistribution((prev) => ({
+      ...prev,
+      [fragranceId]: value,
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate fragrance distribution
+    const totalFragranceQty = Object.values(fragranceDistribution).reduce(
+      (sum, qty) => sum + qty,
+      0
+    );
+    if (totalFragranceQty !== cartons) {
+      alert(
+        `La distribution des parfums (${totalFragranceQty} cartons) doit correspondre au total des cartons vendus (${cartons} cartons).`
+      );
+      return;
+    }
+
+    // Verify we have enough stock for each fragrance
+    for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
+      const fragrance = fragranceStock.find(
+        (f) => f.fragranceId === fragranceId
+      );
+      if (fragrance && qty > fragrance.quantity) {
+        alert(
+          `Stock insuffisant pour le parfum "${fragrance.name}". Vous avez ${fragrance.quantity} cartons en stock.`
+        );
+        return;
+      }
+    }
 
     const sale: Omit<Sale, "id"> = {
       date: new Date(saleDate).toISOString(),
@@ -932,17 +988,19 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
           ]
         : [],
       remainingAmount: isPaidImmediately ? 0 : totalValue,
+      fragranceDistribution: fragranceDistribution,
     };
 
     addSale(sale);
 
-    // Update stock by removing the sold cartons
+    // Update stock by removing the sold cartons with fragrance distribution
     updateStock(
       -cartons,
       "removed",
       `Vente de ${cartons} cartons (${quantity} pièces) - ${new Date(
         saleDate
-      ).toLocaleDateString()}`
+      ).toLocaleDateString()}`,
+      fragranceDistribution
     );
 
     if (preFillData?.orderId) {
@@ -1045,6 +1103,106 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
           </div>
         </div>
 
+        {/* Fragrance distribution section - now mandatory */}
+        {cartons > 0 && (
+          <div className="space-y-3 mt-4 border p-4 rounded-xl border-blue-100 bg-blue-50">
+            <div>
+              <span className="text-sm font-medium text-blue-700">
+                Distribution par Parfum (Obligatoire)
+              </span>
+              <p className="text-xs text-blue-500 mt-1">
+                Spécifiez la quantité exacte de chaque parfum
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {fragranceStock.map((fragrance) => (
+                <div key={fragrance.fragranceId} className="space-y-1">
+                  <div className="flex items-center">
+                    <div
+                      className="w-3 h-3 rounded-full mr-1"
+                      style={{ backgroundColor: fragrance.color }}
+                    />
+                    <label className="text-sm text-gray-600">
+                      {fragrance.name}
+                      <span className="text-xs text-gray-400 ml-1">
+                        (Stock: {fragrance.quantity})
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 w-8 flex items-center justify-center border-gray-200 rounded-l-lg"
+                      onClick={() =>
+                        handleFragranceChange(
+                          fragrance.fragranceId,
+                          Math.max(
+                            0,
+                            (fragranceDistribution[fragrance.fragranceId] ||
+                              0) - 1
+                          )
+                        )
+                      }
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <input
+                      type="number"
+                      className="h-8 w-full text-center text-sm border-x-0 border-y border-gray-200"
+                      value={fragranceDistribution[fragrance.fragranceId] || 0}
+                      onChange={(e) =>
+                        handleFragranceChange(
+                          fragrance.fragranceId,
+                          parseInt(e.target.value) || 0
+                        )
+                      }
+                      min="0"
+                      max={fragrance.quantity}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 w-8 flex items-center justify-center border-gray-200 rounded-r-lg"
+                      onClick={() => {
+                        const currentValue =
+                          fragranceDistribution[fragrance.fragranceId] || 0;
+                        if (currentValue < fragrance.quantity) {
+                          handleFragranceChange(
+                            fragrance.fragranceId,
+                            currentValue + 1
+                          );
+                        }
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between text-sm text-blue-600 pt-1">
+              <div>
+                Total distribué:{" "}
+                {Object.values(fragranceDistribution).reduce(
+                  (sum, qty) => sum + qty,
+                  0
+                )}{" "}
+                / {cartons} cartons
+              </div>
+              {Object.values(fragranceDistribution).reduce(
+                (sum, qty) => sum + qty,
+                0
+              ) !== cartons && (
+                <div className="text-red-500 font-medium">
+                  Les quantités doivent correspondre exactement
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">
             Quantité Totale (Pièces)
@@ -1093,7 +1251,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
               onClick={() => setPriceOption("option2")}
             >
               <div className="text-left">
-                <div className="font-medium text-base">166 DZD</div>
+                <div className="font-medium text-base">180 DZD</div>
                 <div
                   className={`text-xs ${
                     priceOption === "option2"
@@ -1101,7 +1259,7 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                       : "text-gray-500"
                   }`}
                 >
-                  Retour: 149 DZD/unité
+                  Retour: 163 DZD/unité
                 </div>
               </div>
             </Button>
@@ -2388,19 +2546,80 @@ function StockPage({ onBack }: StockPageProps) {
   const [newStock, setNewStock] = useState<{ cartons: number }>({ cartons: 0 });
   const [stockHistory, setStockHistory] = useState<StockHistoryItem[]>([]);
   const [currentStock, setCurrentStock] = useState<number>(0);
+  const [fragranceStock, setFragranceStock] = useState<FragranceStock[]>([]);
+  const [showFragranceForm, setShowFragranceForm] = useState<boolean>(false);
+  const [fragranceDistribution, setFragranceDistribution] = useState<
+    Record<string, number>
+  >({});
 
   // Load initial data
   useEffect(() => {
     setStockHistory(getStockHistory());
     setCurrentStock(getCurrentStock());
+    setFragranceStock(getFragranceStock());
+
+    // Initialize fragrance distribution
+    const initialDistribution: Record<string, number> = {};
+    getFragrances().forEach(
+      (fragrance: { id: string; name: string; color: string }) => {
+        initialDistribution[fragrance.id] = 0;
+      }
+    );
+    setFragranceDistribution(initialDistribution);
   }, []);
 
   const handleAdjustStock = (e: React.FormEvent): void => {
     e.preventDefault();
     const difference = newStock.cartons - currentStock;
-    updateStock(difference, "adjusted", "Ajustement manuel");
+
+    // Check if fragrance distribution is enabled
+    if (showFragranceForm) {
+      // Calculate total fragrance quantities to ensure they match the total stock
+      const totalFragranceQty = Object.values(fragranceDistribution).reduce(
+        (sum, qty) => sum + qty,
+        0
+      );
+
+      if (totalFragranceQty !== newStock.cartons) {
+        alert(
+          `La distribution des parfums (${totalFragranceQty} cartons) doit correspondre au stock total (${newStock.cartons} cartons).`
+        );
+        return;
+      }
+
+      // This represents a completely new stock allocation
+      // First, save the current fragrance stock to calculate differences
+      const currentFragranceStock = getFragranceStock();
+      const fragranceChanges: Record<string, number> = {};
+
+      // Calculate the difference between new distribution and current stock for each fragrance
+      currentFragranceStock.forEach((fragrance: FragranceStock) => {
+        const currentQty = fragrance.quantity;
+        const newQty = fragranceDistribution[fragrance.fragranceId] || 0;
+        fragranceChanges[fragrance.fragranceId] = newQty - currentQty;
+      });
+
+      // Update stock with the calculated changes
+      updateStock(
+        difference,
+        "adjusted",
+        "Ajustement manuel",
+        fragranceChanges
+      );
+    } else {
+      // If fragrance form not used, just update total
+      updateStock(difference, "adjusted", "Ajustement manuel");
+    }
+
     // Reload the page to refresh all data
     window.location.reload();
+  };
+
+  const handleFragranceChange = (fragranceId: string, value: number): void => {
+    setFragranceDistribution((prev) => ({
+      ...prev,
+      [fragranceId]: value,
+    }));
   };
 
   return (
@@ -2439,6 +2658,37 @@ function StockPage({ onBack }: StockPageProps) {
           </p>
         </CardContent>
       </Card>
+
+      {/* Fragrance Stock Grid */}
+      <div className="mb-6">
+        <h2 className="text-lg font-medium text-gray-700 mb-3">
+          Stock par Parfum
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          {fragranceStock.map((fragrance) => (
+            <Card
+              key={fragrance.fragranceId}
+              className="border-none shadow-sm overflow-hidden"
+            >
+              <div className="p-3 flex items-center justify-between">
+                <div className="flex items-center">
+                  <div
+                    className="w-4 h-4 rounded-full mr-2"
+                    style={{ backgroundColor: fragrance.color }}
+                  />
+                  <span className="font-medium">{fragrance.name}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-lg font-bold">
+                    {fragrance.quantity}
+                  </span>
+                  <span className="text-sm text-gray-500 ml-1">cartons</span>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
 
       {/* Single Adjust Stock Button */}
       <Button
@@ -2512,6 +2762,119 @@ function StockPage({ onBack }: StockPageProps) {
                 </p>
               </div>
             </div>
+
+            {/* Fragrance distribution toggle */}
+            {newStock.cartons > 0 && (
+              <div className="pt-2">
+                <div className="flex items-center justify-between bg-purple-50 p-3 rounded-lg">
+                  <div>
+                    <span className="text-sm font-medium text-purple-700">
+                      Distribuer par parfum
+                    </span>
+                    <p className="text-xs text-purple-500 mt-1">
+                      Spécifier la quantité de chaque parfum
+                    </p>
+                  </div>
+                  <Switch
+                    checked={showFragranceForm}
+                    onCheckedChange={() =>
+                      setShowFragranceForm(!showFragranceForm)
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Fragrance distribution inputs */}
+            {showFragranceForm && newStock.cartons > 0 && (
+              <div className="space-y-3 pt-2 border p-3 rounded-xl border-purple-100 bg-purple-50">
+                <h3 className="text-sm font-medium text-purple-700">
+                  Distribution du stock ({newStock.cartons} cartons au total)
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {fragranceStock.map((fragrance) => (
+                    <div key={fragrance.fragranceId} className="space-y-1">
+                      <div className="flex items-center">
+                        <div
+                          className="w-3 h-3 rounded-full mr-1"
+                          style={{ backgroundColor: fragrance.color }}
+                        />
+                        <label className="text-sm text-gray-600">
+                          {fragrance.name}
+                          <span className="text-xs text-gray-400 ml-1">
+                            (Actuel: {fragrance.quantity})
+                          </span>
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-8 w-8 flex items-center justify-center border-gray-200 rounded-l-lg"
+                          onClick={() =>
+                            handleFragranceChange(
+                              fragrance.fragranceId,
+                              Math.max(
+                                0,
+                                (fragranceDistribution[fragrance.fragranceId] ||
+                                  0) - 1
+                              )
+                            )
+                          }
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <input
+                          type="number"
+                          className="h-8 w-full text-center text-sm border-x-0 border-y border-gray-200"
+                          value={
+                            fragranceDistribution[fragrance.fragranceId] || 0
+                          }
+                          onChange={(e) =>
+                            handleFragranceChange(
+                              fragrance.fragranceId,
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          min="0"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-8 w-8 flex items-center justify-center border-gray-200 rounded-r-lg"
+                          onClick={() =>
+                            handleFragranceChange(
+                              fragrance.fragranceId,
+                              (fragranceDistribution[fragrance.fragranceId] ||
+                                0) + 1
+                            )
+                          }
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-sm text-purple-600 pt-1">
+                  Total distribué:{" "}
+                  {Object.values(fragranceDistribution).reduce(
+                    (sum, qty) => sum + qty,
+                    0
+                  )}{" "}
+                  / {newStock.cartons} cartons
+                  {Object.values(fragranceDistribution).reduce(
+                    (sum, qty) => sum + qty,
+                    0
+                  ) !== newStock.cartons && (
+                    <div className="text-red-500 font-medium mt-1">
+                      Le total doit correspondre exactement au stock total
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex space-x-3">
               <Button
                 type="submit"
@@ -2544,37 +2907,81 @@ function StockPage({ onBack }: StockPageProps) {
             .map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm"
+                className="flex flex-col p-4 bg-white border border-gray-200 rounded-xl shadow-sm"
               >
-                <div>
-                  <h3 className="font-medium text-gray-800">
-                    {new Date(item.date).toLocaleDateString("fr-FR")}
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {"type" in item && item.type === "adjusted"
-                      ? "Ajustement"
-                      : "type" in item && item.type === "removed"
-                      ? "Vente"
-                      : "Livraison"}
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-gray-800">
+                      {new Date(item.date).toLocaleDateString("fr-FR")}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {"type" in item && item.type === "adjusted"
+                        ? "Ajustement"
+                        : "type" in item && item.type === "removed"
+                        ? "Vente"
+                        : "Livraison"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-base font-medium ${
+                        item.quantity > 0
+                          ? "text-green-600"
+                          : item.quantity < 0
+                          ? "text-red-600"
+                          : ""
+                      }`}
+                    >
+                      {item.quantity > 0 ? "+" : ""}
+                      {item.quantity} cartons
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Stock final: {item.currentStock} cartons
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p
-                    className={`text-base font-medium ${
-                      item.quantity > 0
-                        ? "text-green-600"
-                        : item.quantity < 0
-                        ? "text-red-600"
-                        : ""
-                    }`}
-                  >
-                    {item.quantity > 0 ? "+" : ""}
-                    {item.quantity} cartons
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Stock: {item.quantity + getCurrentStock()} cartons
-                  </p>
-                </div>
+
+                {/* Fragrance distribution if available */}
+                {item.fragranceDistribution &&
+                  Object.keys(item.fragranceDistribution).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs font-medium text-gray-500 mb-2">
+                        Distribution par parfum
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(item.fragranceDistribution).map(
+                          ([fragranceId, quantity]) => {
+                            if (quantity === 0) return null;
+                            const fragInfo = fragranceStock.find(
+                              (f) => f.fragranceId === fragranceId
+                            );
+                            if (!fragInfo) return null;
+
+                            return (
+                              <div
+                                key={fragranceId}
+                                className="flex items-center justify-between"
+                              >
+                                <div className="flex items-center">
+                                  <div
+                                    className="w-3 h-3 rounded-full mr-1"
+                                    style={{ backgroundColor: fragInfo.color }}
+                                  />
+                                  <span className="text-xs">
+                                    {fragInfo.name}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-medium">
+                                  {quantity > 0 ? "+" : ""}
+                                  {quantity} cartons
+                                </span>
+                              </div>
+                            );
+                          }
+                        )}
+                      </div>
+                    </div>
+                  )}
               </div>
             ))}
         </div>
