@@ -51,6 +51,10 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 
 interface SupermarketsPageProps {
@@ -117,8 +121,10 @@ export default function Dashboard() {
       profit: 0,
       stock: 0,
       supplierPayment: 0,
+      paidProfit: 0,
     },
     salesData: [] as { name: string; value: number }[],
+    fragranceStock: [] as { name: string; value: number; color: string }[],
   });
 
   // Add this calculation in the Dashboard component, after the dashboardData state
@@ -160,7 +166,18 @@ export default function Dashboard() {
       return acc + sale.quantity * benefitPerUnit;
     }, 0);
 
-    // Calculate supplier payment amount - new addition
+    // Calculate profit from paid sales only
+    const paidProfit = monthlySales.reduce((acc, sale) => {
+      if (sale.isPaid) {
+        // Only include paid sales
+        const benefitPerUnit =
+          sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
+        return acc + sale.quantity * benefitPerUnit;
+      }
+      return acc;
+    }, 0);
+
+    // Calculate supplier payment amount
     const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
       // Determine supplier cost per unit based on sale price
       const supplierCostPerUnit =
@@ -169,6 +186,13 @@ export default function Dashboard() {
     }, 0);
 
     const currentStock = getCurrentStock();
+
+    // Get fragrance stock data for the pie chart
+    const fragranceData = getFragranceStock().map((fragrance) => ({
+      name: fragrance.name,
+      value: fragrance.quantity,
+      color: fragrance.color,
+    }));
 
     // Get last 7 days sales data
     const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -200,9 +224,11 @@ export default function Dashboard() {
         revenue: totalRevenue,
         profit: totalProfit,
         stock: currentStock * 9, // Convert cartons to units
-        supplierPayment: totalSupplierPayment, // Add supplier payment to dashboard data
+        supplierPayment: totalSupplierPayment,
+        paidProfit: paidProfit,
       },
       salesData,
+      fragranceStock: fragranceData,
     });
   };
 
@@ -322,7 +348,7 @@ export default function Dashboard() {
               <Card className="overflow-hidden border-none shadow-md rounded-xl">
                 <div className="bg-gradient-to-br from-green-500 to-green-600 p-2">
                   <CardTitle className="text-xs font-medium text-white/90">
-                    Bénéfice
+                    Bénéfice Estimé
                   </CardTitle>
                 </div>
                 <CardContent className="p-3">
@@ -336,6 +362,37 @@ export default function Dashboard() {
                     </span>
                     <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded-full ml-1">
                       17 DZD/166 DZD
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="overflow-hidden border-none shadow-md rounded-xl">
+                <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-2">
+                  <CardTitle className="text-xs font-medium text-white/90">
+                    Bénéfice Réel (Payé)
+                  </CardTitle>
+                </div>
+                <CardContent className="p-3">
+                  <div className="text-2xl font-bold text-gray-800">
+                    {dashboardData.monthlySales.paidProfit.toLocaleString(
+                      "fr-DZ"
+                    )}{" "}
+                    DZD
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
+                      Ventes payées uniquement
+                    </span>
+                    <span className="text-sm font-medium text-amber-600">
+                      {dashboardData.monthlySales.profit > 0
+                        ? Math.round(
+                            (dashboardData.monthlySales.paidProfit /
+                              dashboardData.monthlySales.profit) *
+                              100
+                          )
+                        : 0}
+                      %
                     </span>
                   </div>
                 </CardContent>
@@ -584,13 +641,14 @@ export default function Dashboard() {
                           const yearB = b[0].split(" ")[1];
 
                           // Compare years first
-                          const yearDiff = parseInt(yearB) - parseInt(yearA);
-                          if (yearDiff !== 0) return yearDiff;
+                          if (yearA !== yearB) {
+                            return parseInt(yearA) - parseInt(yearB);
+                          }
 
                           // If years are equal, compare months
                           return (
-                            (monthNamesMap[monthB] || 0) -
-                            (monthNamesMap[monthA] || 0)
+                            (monthNamesMap[monthA] || 0) -
+                            (monthNamesMap[monthB] || 0)
                           );
                         })
                         .map(([month, data]) => {
@@ -635,6 +693,88 @@ export default function Dashboard() {
                         })}
                     </tbody>
                   </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-md rounded-xl overflow-hidden">
+              <div className="p-3 border-b">
+                <CardTitle className="text-sm font-medium text-gray-700">
+                  Distribution du Stock par Parfum
+                </CardTitle>
+              </div>
+              <CardContent className="p-0">
+                <div className="h-[300px] w-full p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dashboardData.fragranceStock}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="value"
+                        nameKey="name"
+                        label={({
+                          cx,
+                          cy,
+                          midAngle,
+                          innerRadius,
+                          outerRadius,
+                          percent,
+                        }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius =
+                            innerRadius + (outerRadius - innerRadius) * 0.5;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill="#fff"
+                              textAnchor={x > cx ? "start" : "end"}
+                              dominantBaseline="central"
+                              fontSize={12}
+                              fontWeight="bold"
+                            >
+                              {`${(percent * 100).toFixed(0)}%`}
+                            </text>
+                          );
+                        }}
+                      >
+                        {dashboardData.fragranceStock.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number) => [`${value} cartons`, ""]}
+                        contentStyle={{
+                          borderRadius: "8px",
+                          border: "none",
+                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                        }}
+                      />
+                      <Legend
+                        layout="horizontal"
+                        verticalAlign="bottom"
+                        align="center"
+                        formatter={(value) => (
+                          <span style={{ color: "#666", fontSize: "12px" }}>
+                            {value}
+                          </span>
+                        )}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 rounded-b-xl">
+                  Stock total:{" "}
+                  <span className="font-medium text-purple-600">
+                    {Math.floor(dashboardData.monthlySales.stock / 9)} cartons
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -2154,7 +2294,7 @@ function SupermarketProfilePage({
 
                 // If years are equal, compare months
                 return (
-                  (monthNamesMap[monthB] || 0) - (monthNamesMap[monthA] || 0)
+                  (monthNamesMap[monthA] || 0) - (monthNamesMap[monthB] || 0)
                 );
               })
               .map(([month, data]) => {
