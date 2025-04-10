@@ -401,29 +401,30 @@ export const deleteOrder = async (id: string): Promise<boolean> => {
 export const getCurrentStock = async (): Promise<number> => {
   try {
     if (!isOnline()) {
-      const localData = localStorage.getItem('currentStock');
-      return localData ? JSON.parse(localData).quantity : 0;
+      // Sum up all fragrance stock quantities
+      const fragranceStocks = JSON.parse(localStorage.getItem('soap_fragrance_stock') || '[]');
+      return fragranceStocks.reduce((total: number, item: { fragranceId: string; name: string; quantity: number; color: string }) => 
+        total + (item.quantity || 0), 0);
     }
 
+    // If online, get the sum of fragrance stocks from Supabase
     const { data, error } = await supabaseClient
-      .from('current_stock')
-      .select('*')
-      .single();
+      .from('fragrance_stock')
+      .select('quantity');
 
     if (error) throw error;
 
-    // Update local storage
-    localStorage.setItem('currentStock', JSON.stringify(data));
-
-    return data.quantity;
+    // Sum up all quantities
+    return data.reduce((total, item) => total + (item.quantity || 0), 0);
   } catch (error) {
-    return handleSupabaseError(error) || 0;
+    console.error('Error getting current stock:', error);
+    return 0;
   }
 };
 
 export const updateStock = async (productId: string, quantity: number, reason?: string) => {
   try {
-    // Update local storage first
+    // Update fragrance stock in local storage first
     const localStock = JSON.parse(localStorage.getItem('current_stock') || '[]')
     const existingStock = localStock.find((s: CurrentStock) => s.product_id === productId)
     
@@ -453,30 +454,68 @@ export const updateStock = async (productId: string, quantity: number, reason?: 
 
     // If online, sync with Supabase
     if (isOnline()) {
-      const { data: stockData, error: stockError } = await supabaseClient
+      // First, get the current stock
+      const { data: currentStock, error: fetchError } = await supabaseClient
         .from('current_stock')
-        .upsert({
-          product_id: productId,
-          quantity,
-          updated_at: new Date().toISOString()
-        })
-        .select()
+        .select('*')
+        .eq('product_id', productId)
         .single()
 
-      if (stockError) throw stockError
+      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError
 
-      const { error: historyError } = await supabaseClient
-        .from('stock_history')
-        .insert([{
-          product_id: productId,
-          quantity,
-          type: quantity > 0 ? 'in' : 'out',
-          reason: reason || null
-        }])
+      if (currentStock) {
+        // Update existing stock by adding the new quantity
+        const { data: stockData, error: stockError } = await supabaseClient
+          .from('current_stock')
+          .update({
+            quantity: currentStock.quantity + quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('product_id', productId)
+          .select()
+          .single()
 
-      if (historyError) throw historyError
+        if (stockError) throw stockError
 
-      return stockData
+        const { error: historyError } = await supabaseClient
+          .from('stock_history')
+          .insert([{
+            product_id: productId,
+            quantity,
+            type: quantity > 0 ? 'in' : 'out',
+            reason: reason || null
+          }])
+
+        if (historyError) throw historyError
+
+        return stockData
+      } else {
+        // Insert new stock record
+        const { data: stockData, error: stockError } = await supabaseClient
+          .from('current_stock')
+          .insert({
+            product_id: productId,
+            quantity,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        if (stockError) throw stockError
+
+        const { error: historyError } = await supabaseClient
+          .from('stock_history')
+          .insert([{
+            product_id: productId,
+            quantity,
+            type: quantity > 0 ? 'in' : 'out',
+            reason: reason || null
+          }])
+
+        if (historyError) throw historyError
+
+        return stockData
+      }
     }
 
     return existingStock || localStock[localStock.length - 1]

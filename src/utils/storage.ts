@@ -15,6 +15,7 @@ export interface Sale {
   remainingAmount: number;
   fromOrder?: boolean;
   note?: string;
+  fragranceDistribution?: Record<string, number>;
 }
 
 export interface Supermarket {
@@ -66,7 +67,6 @@ export interface Payment {
 const SALES_KEY = 'soap_sales';
 const SUPERMARKETS_KEY = 'soap_supermarkets';
 const STOCK_KEY = 'soap_stock';
-const CURRENT_STOCK_KEY = 'soap_current_stock';
 const ORDERS_KEY = 'soap_orders';
 const FRAGRANCES_KEY = 'soap_fragrances';
 const FRAGRANCE_STOCK_KEY = 'soap_fragrance_stock';
@@ -104,6 +104,64 @@ export const addSale = (saleData: Omit<Sale, 'id'>) => {
   updateSupermarketStats(saleData.supermarketId, saleData.quantity, saleData.totalValue);
 
   return newSale;
+};
+
+export const deleteSale = (saleId: string): boolean => {
+  if (typeof window === 'undefined') return false;
+  const sales = getSales();
+  const saleIndex = sales.findIndex(s => s.id === saleId);
+  
+  if (saleIndex === -1) return false;
+  
+  const sale = sales[saleIndex];
+  
+  // Remove the sale
+  sales.splice(saleIndex, 1);
+  localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+  
+  // Update supermarket stats (subtract the sale)
+  const supermarkets = getSupermarkets();
+  const supermarketIndex = supermarkets.findIndex(s => s.id === sale.supermarketId);
+  
+  if (supermarketIndex !== -1) {
+    supermarkets[supermarketIndex].totalSales -= sale.quantity;
+    supermarkets[supermarketIndex].totalValue -= sale.totalValue;
+    localStorage.setItem(SUPERMARKETS_KEY, JSON.stringify(supermarkets));
+  }
+  
+  // Update stock by adding back the sold cartons
+  if (sale.fragranceDistribution) {
+    // Add the stock back using updateStock which will handle both the fragrance distribution
+    // and the stock history record
+    updateStock(
+      sale.cartons,
+      "added",
+      `Annulation de vente - ${new Date(sale.date).toLocaleDateString()}`,
+      sale.fragranceDistribution
+    );
+  } else {
+    // If no fragrance distribution data, distribute evenly across fragrances
+    const fragrances = getFragrances();
+    const fragranceCount = fragrances.length;
+    const baseAmount = Math.floor(sale.cartons / fragranceCount);
+    const remainder = sale.cartons % fragranceCount;
+    
+    // Create even distribution
+    const evenDistribution: Record<string, number> = {};
+    fragrances.forEach((fragrance, index) => {
+      evenDistribution[fragrance.id] = baseAmount + (index < remainder ? 1 : 0);
+    });
+    
+    // Update stock with even distribution
+    updateStock(
+      sale.cartons,
+      "added",
+      `Annulation de vente - ${new Date(sale.date).toLocaleDateString()}`,
+      evenDistribution
+    );
+  }
+  
+  return true;
 };
 
 // Supermarkets CRUD
@@ -168,8 +226,13 @@ export const updateSupermarket = (id: string, updatedData: Partial<Omit<Supermar
 // Stock CRUD
 export const getCurrentStock = (): number => {
   if (typeof window === 'undefined') return 0;
-  const stock = localStorage.getItem(CURRENT_STOCK_KEY);
-  return stock ? parseInt(stock) : 0;
+  
+  // Calculate current stock as the sum of all fragrance stocks
+  const fragranceStock = getFragranceStock();
+  if (!fragranceStock.length) return 0;
+  
+  // Sum up the quantities of all fragrances
+  return fragranceStock.reduce((total, item) => total + item.quantity, 0);
 };
 
 export const getStockHistory = (): Stock[] => {
@@ -185,21 +248,19 @@ export const updateStock = (
   fragranceDistribution?: Record<string, number>
 ) => {
   if (typeof window === 'undefined') return 0;
-  const currentStock = getCurrentStock();
-  const newStock = currentStock + quantity;
-
-  // Update current stock
-  localStorage.setItem(CURRENT_STOCK_KEY, newStock.toString());
-
+  
   // Update fragrance stock if distribution is provided
   if (fragranceDistribution) {
     Object.entries(fragranceDistribution).forEach(([fragranceId, qty]) => {
       // If we're removing stock (negative quantity), we need to subtract the fragrance amounts
       // If we're adding stock (positive quantity), we need to add the fragrance amounts
-      const adjustedQty = quantity < 0 ? -qty : qty;
+      const adjustedQty = type === 'adjusted' ? qty : (type === 'removed' ? -qty : qty);
       updateFragranceStock(fragranceId, adjustedQty);
     });
   }
+
+  // Get the current stock (calculated from fragrance stocks)
+  const newStock = getCurrentStock();
 
   // Add to history
   const stockHistory = getStockHistory();

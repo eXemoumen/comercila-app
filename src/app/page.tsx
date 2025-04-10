@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { InvoiceModal } from "@/components/InvoiceModal";
 import {
@@ -19,6 +19,7 @@ import {
   addPayment,
   getFragranceStock,
   getFragrances,
+  deleteSale,
 } from "@/utils/storage";
 import type { Sale, Order, Supermarket, FragranceStock } from "@/types/index";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -107,7 +108,7 @@ export default function Dashboard() {
   const [preFillSaleData, setPreFillSaleData] = useState<{
     supermarketId: string;
     quantity: number;
-    orderId: string;
+    orderId?: string;
   } | null>(null);
   const [dashboardData, setDashboardData] = useState({
     monthlySales: {
@@ -125,133 +126,146 @@ export default function Dashboard() {
     Record<string, MonthlyData>
   >({});
 
-  // Load and update dashboard data
-  useEffect(() => {
-    const updateDashboardData = () => {
-      // Get current month's sales
-      const allSales = getSales();
-      const currentDate = new Date();
-      const currentMonth = currentDate.getMonth();
-      const currentYear = currentDate.getFullYear();
+  // Create a function to update dashboard data that can be reused
+  const updateDashboardData = () => {
+    // Get current month's sales
+    const allSales = getSales();
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
 
-      const monthlySales = allSales.filter((sale) => {
+    const monthlySales = allSales.filter((sale) => {
+      const saleDate = new Date(sale.date);
+      return (
+        saleDate.getMonth() === currentMonth &&
+        saleDate.getFullYear() === currentYear
+      );
+    });
+
+    // Calculate monthly statistics
+    const totalQuantity = monthlySales.reduce(
+      (acc, sale) => acc + sale.quantity,
+      0
+    );
+    const totalRevenue = monthlySales.reduce(
+      (acc, sale) => acc + sale.totalValue,
+      0
+    );
+
+    // Calculate profit based on the actual pricePerUnit from sales
+    const totalProfit = monthlySales.reduce((acc, sale) => {
+      // Determine benefit per unit based on sale price
+      const benefitPerUnit =
+        sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
+      return acc + sale.quantity * benefitPerUnit;
+    }, 0);
+
+    // Calculate supplier payment amount - new addition
+    const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
+      // Determine supplier cost per unit based on sale price
+      const supplierCostPerUnit =
+        sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
+      return acc + sale.quantity * supplierCostPerUnit;
+    }, 0);
+
+    const currentStock = getCurrentStock();
+
+    // Get last 7 days sales data
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date;
+    }).reverse();
+
+    const salesData = last7Days.map((date) => {
+      const daySales = allSales.filter((sale) => {
         const saleDate = new Date(sale.date);
-        return (
-          saleDate.getMonth() === currentMonth &&
-          saleDate.getFullYear() === currentYear
-        );
+        return saleDate.toDateString() === date.toDateString();
       });
 
-      // Calculate monthly statistics
-      const totalQuantity = monthlySales.reduce(
-        (acc, sale) => acc + sale.quantity,
-        0
-      );
-      const totalRevenue = monthlySales.reduce(
+      const totalValue = daySales.reduce(
         (acc, sale) => acc + sale.totalValue,
         0
       );
 
-      // Calculate profit based on the actual pricePerUnit from sales
-      const totalProfit = monthlySales.reduce((acc, sale) => {
-        // Determine benefit per unit based on sale price
-        const benefitPerUnit =
-          sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-        return acc + sale.quantity * benefitPerUnit;
-      }, 0);
+      return {
+        name: date.toLocaleDateString("fr-FR", { weekday: "short" }),
+        value: totalValue,
+      };
+    });
 
-      // Calculate supplier payment amount - new addition
-      const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
-        // Determine supplier cost per unit based on sale price
-        const supplierCostPerUnit =
-          sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
-        return acc + sale.quantity * supplierCostPerUnit;
-      }, 0);
+    setDashboardData({
+      monthlySales: {
+        quantity: totalQuantity,
+        revenue: totalRevenue,
+        profit: totalProfit,
+        stock: currentStock * 9, // Convert cartons to units
+        supplierPayment: totalSupplierPayment, // Add supplier payment to dashboard data
+      },
+      salesData,
+    });
+  };
 
-      const currentStock = getCurrentStock();
+  // Calculate monthly benefits data
+  const calculateMonthlyBenefits = () => {
+    const allSales = getSales();
+    const monthlyData: Record<string, MonthlyData> = {};
 
-      // Get last 7 days sales data
-      const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        return date;
-      }).reverse();
+    allSales.forEach((sale) => {
+      const date = new Date(sale.date);
+      // Format the month and year in French with proper capitalization
+      let monthYear = date.toLocaleDateString("fr-FR", {
+        month: "long",
+        year: "numeric",
+      });
 
-      const salesData = last7Days.map((date) => {
-        const daySales = allSales.filter((sale) => {
-          const saleDate = new Date(sale.date);
-          return saleDate.toDateString() === date.toDateString();
-        });
+      // Capitalize the first letter of the month
+      monthYear = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
 
-        const totalValue = daySales.reduce(
-          (acc, sale) => acc + sale.totalValue,
-          0
-        );
-
-        return {
-          name: date.toLocaleDateString("fr-FR", { weekday: "short" }),
-          value: totalValue,
+      if (!monthlyData[monthYear]) {
+        monthlyData[monthYear] = {
+          quantity: 0,
+          value: 0,
+          netBenefit: 0,
         };
-      });
+      }
 
-      setDashboardData({
-        monthlySales: {
-          quantity: totalQuantity,
-          revenue: totalRevenue,
-          profit: totalProfit,
-          stock: currentStock * 9, // Convert cartons to units
-          supplierPayment: totalSupplierPayment, // Add supplier payment to dashboard data
-        },
-        salesData,
-      });
-    };
+      const benefitPerUnit =
+        sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
 
+      monthlyData[monthYear].quantity += sale.quantity;
+      monthlyData[monthYear].value += sale.totalValue;
+      monthlyData[monthYear].netBenefit += sale.quantity * benefitPerUnit;
+    });
+
+    setMonthlyBenefits(monthlyData);
+  };
+
+  // Load and update dashboard data
+  useEffect(() => {
     // Initial load
     updateDashboardData();
 
     // Set up interval to update data every minute
     const interval = setInterval(updateDashboardData, 60000);
 
-    // Cleanup interval on unmount
-    return () => clearInterval(interval);
-  }, []);
-
-  // Add this useEffect after the existing dashboard data useEffect
-  useEffect(() => {
-    const calculateMonthlyBenefits = () => {
-      const allSales = getSales();
-      const monthlyData: Record<string, MonthlyData> = {};
-
-      allSales.forEach((sale) => {
-        const date = new Date(sale.date);
-        // Format the month and year in French with proper capitalization
-        let monthYear = date.toLocaleDateString("fr-FR", {
-          month: "long",
-          year: "numeric",
-        });
-
-        // Capitalize the first letter of the month
-        monthYear = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
-
-        if (!monthlyData[monthYear]) {
-          monthlyData[monthYear] = {
-            quantity: 0,
-            value: 0,
-            netBenefit: 0,
-          };
-        }
-
-        const benefitPerUnit =
-          sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-
-        monthlyData[monthYear].quantity += sale.quantity;
-        monthlyData[monthYear].value += sale.totalValue;
-        monthlyData[monthYear].netBenefit += sale.quantity * benefitPerUnit;
-      });
-
-      setMonthlyBenefits(monthlyData);
+    // Add event listener for saleDataChanged event
+    const handleSaleDataChanged = () => {
+      updateDashboardData();
+      calculateMonthlyBenefits();
     };
 
+    window.addEventListener("saleDataChanged", handleSaleDataChanged);
+
+    // Cleanup interval and event listener on unmount
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("saleDataChanged", handleSaleDataChanged);
+    };
+  }, []);
+
+  // Update monthly benefits
+  useEffect(() => {
     calculateMonthlyBenefits();
   }, []);
 
@@ -886,6 +900,11 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
   const [fragranceDistribution, setFragranceDistribution] = useState<
     Record<string, number>
   >({});
+  // Add search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredSupermarkets, setFilteredSupermarkets] = useState<
+    Supermarket[]
+  >([]);
 
   // Load fragrance data
   useEffect(() => {
@@ -899,7 +918,22 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       }
     );
     setFragranceDistribution(initialDistribution);
+
+    // Initialize filtered supermarkets
+    setFilteredSupermarkets(getSupermarkets());
   }, []);
+
+  // Filter supermarkets when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredSupermarkets(getSupermarkets());
+    } else {
+      const filtered = getSupermarkets().filter((sm) =>
+        sm.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredSupermarkets(filtered);
+    }
+  }, [searchQuery]);
 
   // Calculate quantity based on cartons (9 pieces per carton)
   const quantity = cartons * 9;
@@ -1048,19 +1082,28 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
           <label className="text-sm font-medium text-gray-700">
             Supermarché
           </label>
-          <select
-            className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
-            value={supermarketId}
-            onChange={(e) => setSupermarketId(e.target.value)}
-            required
-          >
-            <option value="">Sélectionner un supermarché</option>
-            {getSupermarkets().map((sm) => (
-              <option key={sm.id} value={sm.id}>
-                {sm.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Rechercher un supermarché..."
+              className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm mb-2"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <select
+              className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+              value={supermarketId}
+              onChange={(e) => setSupermarketId(e.target.value)}
+              required
+            >
+              <option value="">Sélectionner un supermarché</option>
+              {filteredSupermarkets.map((sm) => (
+                <option key={sm.id} value={sm.id}>
+                  {sm.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -1640,6 +1683,8 @@ function SupermarketProfilePage({
     name: "",
     number: "",
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     // Load supermarket data
@@ -1699,6 +1744,33 @@ function SupermarketProfilePage({
     }));
   };
 
+  const handleDeleteSale = (saleId: string) => {
+    setSaleToDelete(saleId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteSale = () => {
+    if (saleToDelete) {
+      // Delete the sale
+      deleteSale(saleToDelete);
+
+      // Refresh the sales history
+      const allSales = getSales();
+      const filteredSales = allSales.filter(
+        (sale) => sale.supermarketId === supermarketId
+      );
+      setSalesHistory(filteredSales);
+
+      // Close the confirmation dialog
+      setShowDeleteConfirm(false);
+      setSaleToDelete(null);
+
+      // Dispatch a custom event to notify that a sale was deleted
+      const event = new CustomEvent("saleDataChanged");
+      window.dispatchEvent(event);
+    }
+  };
+
   const handleSave = async () => {
     if (!supermarket?.id) return;
 
@@ -1726,16 +1798,18 @@ function SupermarketProfilePage({
       }
 
       // Update the supermarket
-      const updatedSupermarket = await updateSupermarket(
+      const updatedSupermarket = updateSupermarket(
         supermarket.id,
         editedSupermarket
       );
+
       if (updatedSupermarket) {
         setSupermarket(updatedSupermarket);
         setIsEditing(false);
       }
     } catch (error) {
       console.error("Error updating supermarket:", error);
+      alert("Erreur lors de la mise à jour du supermarché");
     } finally {
       setLoading(false);
     }
@@ -1747,9 +1821,13 @@ function SupermarketProfilePage({
   };
 
   const handlePaymentUpdate = (saleId: string, isPaid: boolean) => {
-    updateSalePayment(saleId, isPaid);
-    // Reload the page to refresh all data
-    window.location.reload();
+    const updatedSale = updateSalePayment(saleId, isPaid);
+    if (updatedSale) {
+      // Update the sale in the sales history
+      setSalesHistory((prev) =>
+        prev.map((sale) => (sale.id === saleId ? updatedSale : sale))
+      );
+    }
   };
 
   // Calculate totals including payment status
@@ -2253,11 +2331,67 @@ function SupermarketProfilePage({
                       <Check className="h-4 w-4" />
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 text-red-600 rounded-full border-red-200 hover:bg-red-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteSale(sale.id);
+                    }}
+                    title="Supprimer la vente"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </div>
           ))}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white p-5 rounded-2xl w-full max-w-md mx-auto shadow-xl">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-bold text-gray-800">
+                Confirmer la suppression
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full h-8 w-8 hover:bg-gray-100"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setSaleToDelete(null);
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <p className="mb-6">
+              Êtes-vous sûr de vouloir supprimer cette vente ? Cette action est
+              irréversible.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setSaleToDelete(null);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button variant="destructive" onClick={confirmDeleteSale}>
+                Supprimer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sale Details Modal */}
       {showSaleModal && selectedSale && (
@@ -2551,12 +2685,25 @@ function StockPage({ onBack }: StockPageProps) {
   const [fragranceDistribution, setFragranceDistribution] = useState<
     Record<string, number>
   >({});
+  const [isAddingMode, setIsAddingMode] = useState<boolean>(true);
+
+  // Function to load stock data
+  const loadStockData = useCallback(() => {
+    setStockHistory(getStockHistory());
+    // Current stock is now calculated from fragrance stock
+    const fragStock = getFragranceStock();
+    setFragranceStock(fragStock);
+    // Calculate current stock based on fragrance stock
+    const totalStock = fragStock.reduce(
+      (total, item) => total + item.quantity,
+      0
+    );
+    setCurrentStock(totalStock);
+  }, []);
 
   // Load initial data
   useEffect(() => {
-    setStockHistory(getStockHistory());
-    setCurrentStock(getCurrentStock());
-    setFragranceStock(getFragranceStock());
+    loadStockData();
 
     // Initialize fragrance distribution
     const initialDistribution: Record<string, number> = {};
@@ -2566,49 +2713,147 @@ function StockPage({ onBack }: StockPageProps) {
       }
     );
     setFragranceDistribution(initialDistribution);
-  }, []);
+
+    // Add event listener for saleDataChanged event
+    const handleSaleDataChanged = () => {
+      loadStockData();
+    };
+
+    window.addEventListener("saleDataChanged", handleSaleDataChanged);
+
+    // Cleanup event listener on unmount
+    return () => {
+      window.removeEventListener("saleDataChanged", handleSaleDataChanged);
+    };
+  }, [loadStockData]);
 
   const handleAdjustStock = (e: React.FormEvent): void => {
     e.preventDefault();
-    const difference = newStock.cartons - currentStock;
 
-    // Check if fragrance distribution is enabled
-    if (showFragranceForm) {
-      // Calculate total fragrance quantities to ensure they match the total stock
-      const totalFragranceQty = Object.values(fragranceDistribution).reduce(
-        (sum, qty) => sum + qty,
-        0
-      );
+    // Determine if this is an incremental addition or a complete adjustment
+    if (isAddingMode) {
+      // In adding mode, the value in newStock is the amount to add
+      const amountToAdd = newStock.cartons;
 
-      if (totalFragranceQty !== newStock.cartons) {
-        alert(
-          `La distribution des parfums (${totalFragranceQty} cartons) doit correspondre au stock total (${newStock.cartons} cartons).`
-        );
+      if (amountToAdd <= 0) {
+        alert("Veuillez entrer une quantité positive à ajouter.");
         return;
       }
 
-      // This represents a completely new stock allocation
-      // First, save the current fragrance stock to calculate differences
-      const currentFragranceStock = getFragranceStock();
-      const fragranceChanges: Record<string, number> = {};
+      // Check if fragrance distribution is enabled
+      if (showFragranceForm) {
+        // Calculate total fragrance quantities to ensure they match the total amount to add
+        const totalFragranceQty = Object.values(fragranceDistribution).reduce(
+          (sum, qty) => sum + qty,
+          0
+        );
 
-      // Calculate the difference between new distribution and current stock for each fragrance
-      currentFragranceStock.forEach((fragrance: FragranceStock) => {
-        const currentQty = fragrance.quantity;
-        const newQty = fragranceDistribution[fragrance.fragranceId] || 0;
-        fragranceChanges[fragrance.fragranceId] = newQty - currentQty;
-      });
+        if (totalFragranceQty !== amountToAdd) {
+          alert(
+            `La distribution des parfums (${totalFragranceQty} cartons) doit correspondre au total à ajouter (${amountToAdd} cartons).`
+          );
+          return;
+        }
 
-      // Update stock with the calculated changes
-      updateStock(
-        difference,
-        "adjusted",
-        "Ajustement manuel",
-        fragranceChanges
-      );
+        // Update stock with the specified fragrance distribution
+        updateStock(
+          amountToAdd,
+          "added",
+          "Ajout de stock",
+          fragranceDistribution
+        );
+      } else {
+        // If fragrance form not used, distribute added stock evenly
+        const allFragrances = getFragrances();
+        const fragranceCount = allFragrances.length;
+        const baseAmount = Math.floor(amountToAdd / fragranceCount);
+        const remainder = amountToAdd % fragranceCount;
+
+        // Create even distribution with the remainder added to first fragrances
+        const evenDistribution: Record<string, number> = {};
+        allFragrances.forEach((fragrance, index) => {
+          evenDistribution[fragrance.id] =
+            baseAmount + (index < remainder ? 1 : 0);
+        });
+
+        // Update stock with even distribution
+        updateStock(
+          amountToAdd,
+          "added",
+          "Ajout de stock - Distribution automatique",
+          evenDistribution
+        );
+      }
     } else {
-      // If fragrance form not used, just update total
-      updateStock(difference, "adjusted", "Ajustement manuel");
+      // In adjustment mode, calculate the difference from current
+      const difference = newStock.cartons - currentStock;
+
+      // Check if fragrance distribution is enabled
+      if (showFragranceForm) {
+        // Calculate total fragrance quantities to ensure they match the total stock
+        const totalFragranceQty = Object.values(fragranceDistribution).reduce(
+          (sum, qty) => sum + qty,
+          0
+        );
+
+        if (totalFragranceQty !== newStock.cartons) {
+          alert(
+            `La distribution des parfums (${totalFragranceQty} cartons) doit correspondre au stock total (${newStock.cartons} cartons).`
+          );
+          return;
+        }
+
+        // This represents a completely new stock allocation
+        // First, save the current fragrance stock to calculate differences
+        const currentFragranceStock = getFragranceStock();
+        const fragranceChanges: Record<string, number> = {};
+
+        // Calculate the difference between new distribution and current stock for each fragrance
+        currentFragranceStock.forEach((fragrance: FragranceStock) => {
+          const currentQty = fragrance.quantity;
+          const newQty = fragranceDistribution[fragrance.fragranceId] || 0;
+          fragranceChanges[fragrance.fragranceId] = newQty - currentQty;
+        });
+
+        // Update stock with the calculated changes
+        updateStock(
+          difference,
+          "adjusted",
+          "Ajustement manuel",
+          fragranceChanges
+        );
+      } else {
+        // If fragrance form not used, distribute stock evenly
+        const allFragrances = getFragrances();
+        const fragranceCount = allFragrances.length;
+        const baseAmount = Math.floor(newStock.cartons / fragranceCount);
+        const remainder = newStock.cartons % fragranceCount;
+
+        // Create even distribution with the remainder added to first fragrances
+        const evenDistribution: Record<string, number> = {};
+        allFragrances.forEach((fragrance, index) => {
+          evenDistribution[fragrance.id] =
+            baseAmount + (index < remainder ? 1 : 0);
+        });
+
+        // Calculate changes from current stock
+        const currentFragranceStock = getFragranceStock();
+        const fragranceChanges: Record<string, number> = {};
+
+        currentFragranceStock.forEach((fragrance: FragranceStock) => {
+          const currentQty = fragrance.quantity;
+          const newQty = evenDistribution[fragrance.fragranceId] || 0;
+          fragranceChanges[fragrance.fragranceId] = newQty - currentQty;
+        });
+
+        // Update stock with even distribution
+        updateStock(
+          difference,
+          "adjusted",
+          "Ajustement manuel - Distribution automatique",
+          fragranceChanges
+        );
+      }
     }
 
     // Reload the page to refresh all data
@@ -2704,9 +2949,45 @@ function StockPage({ onBack }: StockPageProps) {
       {showAdjustForm && (
         <Card className="border-none shadow-md rounded-xl overflow-hidden mt-5">
           <form onSubmit={handleAdjustStock} className="space-y-4 p-4">
+            {/* Toggle between add and adjust mode */}
+            <div className="flex justify-center mb-4 bg-purple-50 p-2 rounded-lg">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={isAddingMode ? "default" : "outline"}
+                  className={`rounded-md ${
+                    isAddingMode ? "bg-purple-600" : ""
+                  }`}
+                  onClick={() => {
+                    setIsAddingMode(true);
+                    setNewStock({ cartons: 0 });
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Ajouter au stock
+                </Button>
+                <Button
+                  type="button"
+                  variant={!isAddingMode ? "default" : "outline"}
+                  className={`rounded-md ${
+                    !isAddingMode ? "bg-purple-600" : ""
+                  }`}
+                  onClick={() => {
+                    setIsAddingMode(false);
+                    setNewStock({ cartons: currentStock });
+                  }}
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  Ajuster le total
+                </Button>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
-                Nouveau Stock Total (Cartons)
+                {isAddingMode
+                  ? "Quantité à ajouter (Cartons)"
+                  : "Nouveau Stock Total (Cartons)"}
               </label>
               <div className="flex items-center">
                 <Button
@@ -2744,22 +3025,27 @@ function StockPage({ onBack }: StockPageProps) {
                 </Button>
               </div>
               <div className="flex justify-between items-center text-sm text-gray-500 mt-2">
-                <p>{newStock.cartons * 9} pièces au total</p>
-                <p
-                  className={
-                    newStock.cartons > currentStock
-                      ? "text-green-600"
-                      : newStock.cartons < currentStock
-                      ? "text-red-600"
-                      : ""
-                  }
-                >
-                  {newStock.cartons > currentStock
-                    ? `+${newStock.cartons - currentStock}`
-                    : newStock.cartons < currentStock
-                    ? `${newStock.cartons - currentStock}`
-                    : "Aucun changement"}
+                <p>
+                  {newStock.cartons * 9} pièces{" "}
+                  {isAddingMode ? "à ajouter" : "au total"}
                 </p>
+                {!isAddingMode && (
+                  <p
+                    className={
+                      newStock.cartons > currentStock
+                        ? "text-green-600"
+                        : newStock.cartons < currentStock
+                        ? "text-red-600"
+                        : ""
+                    }
+                  >
+                    {newStock.cartons > currentStock
+                      ? `+${newStock.cartons - currentStock}`
+                      : newStock.cartons < currentStock
+                      ? `${newStock.cartons - currentStock}`
+                      : "Aucun changement"}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -3009,9 +3295,26 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
   });
   const [orders, setOrders] = useState<Order[]>([]);
 
-  useEffect(() => {
+  // Function to load orders data
+  const loadOrdersData = useCallback(() => {
     setOrders(getOrders());
   }, []);
+
+  useEffect(() => {
+    loadOrdersData();
+
+    // Add event listener for saleDataChanged event
+    const handleSaleDataChanged = () => {
+      loadOrdersData();
+    };
+
+    window.addEventListener("saleDataChanged", handleSaleDataChanged);
+
+    // Cleanup event listener on unmount
+    return () => {
+      window.removeEventListener("saleDataChanged", handleSaleDataChanged);
+    };
+  }, [loadOrdersData]);
 
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
