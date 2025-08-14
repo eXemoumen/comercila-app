@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Supermarket as SupermarketType } from "@/types";
 import { SupermarketMap } from "@/components/SupermarketMap";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MapPin, Search, ChevronLeft } from "lucide-react";
-import { getSupermarkets } from "@/utils/storage";
+import { getSupermarkets, Supermarket as SupermarketType } from "@/utils/storage";
 
 interface GeocodingResult {
   lat: string;
@@ -49,9 +48,9 @@ export default function FindSupermarkets() {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(lat1 * (Math.PI / 180)) *
-        Math.cos(lat2 * (Math.PI / 180)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
@@ -167,9 +166,8 @@ export default function FindSupermarkets() {
             center?: { lat: number; lon: number };
           }) => {
             const address = element.tags["addr:street"]
-              ? `${element.tags["addr:street"]}, ${
-                  element.tags["addr:city"] || ""
-                }`
+              ? `${element.tags["addr:street"]}, ${element.tags["addr:city"] || ""
+              }`
               : element.tags["addr:full"] || "Adresse non disponible";
 
             return {
@@ -194,10 +192,10 @@ export default function FindSupermarkets() {
         )
         .filter(
           (supermarket: SupermarketType) =>
-            supermarket.location.lat &&
-            supermarket.location.lng &&
-            !isNaN(supermarket.location.lat) &&
-            !isNaN(supermarket.location.lng)
+            supermarket.latitude &&
+            supermarket.longitude &&
+            !isNaN(supermarket.latitude) &&
+            !isNaN(supermarket.longitude)
         );
 
       console.log("Found nearby supermarkets:", nearbySupermarkets);
@@ -268,23 +266,8 @@ export default function FindSupermarkets() {
       try {
         const loadedSupermarkets = await getSupermarkets();
 
-        // Map the storage supermarkets to the expected SupermarketType format
-        const mappedSupermarkets: SupermarketType[] = loadedSupermarkets.map(
-          (sm) => ({
-            id: sm.id,
-            name: sm.name,
-            address: sm.address,
-            // Get the first phone number or fallback to a placeholder
-            phone:
-              sm.phoneNumbers && sm.phoneNumbers.length > 0
-                ? sm.phoneNumbers[0].number
-                : "Non disponible",
-            email: sm.email || "Non disponible",
-            totalSales: sm.totalSales,
-            totalValue: sm.totalValue,
-            location: sm.location,
-          })
-        );
+        // Use the supermarkets directly since they're already in the correct format
+        const mappedSupermarkets: SupermarketType[] = loadedSupermarkets;
 
         setSupermarkets(mappedSupermarkets);
         setFilteredSupermarkets(mappedSupermarkets);
@@ -390,14 +373,13 @@ export default function FindSupermarkets() {
                   className="p-4 cursor-pointer transition-all hover:border-blue-200 hover:shadow-md hover:-translate-y-0.5 duration-200 border-gray-200"
                   onClick={() => {
                     if (
-                      supermarket.location?.lat &&
-                      supermarket.location?.lng
+                      supermarket.latitude &&
+                      supermarket.longitude
                     ) {
                       const searchQuery = `${encodeURIComponent(
                         supermarket.name
-                      )}@${supermarket.location.lat},${
-                        supermarket.location.lng
-                      }`;
+                      )}@${supermarket.latitude},${supermarket.longitude
+                        }`;
                       window.open(
                         `https://www.google.com/maps/search/?api=1&query=${searchQuery}`,
                         "_blank"
@@ -412,8 +394,7 @@ export default function FindSupermarkets() {
                     <div className="flex items-start gap-2 text-sm text-gray-600">
                       <MapPin className="h-4 w-4 mt-1 flex-shrink-0" />
                       <span className="flex-1">
-                        {supermarket.location?.formattedAddress ||
-                          supermarket.address}
+                        {supermarket.address}
                       </span>
                     </div>
                     {searchLocation && (
@@ -422,8 +403,8 @@ export default function FindSupermarkets() {
                         {calculateDistance(
                           searchLocation.lat,
                           searchLocation.lng,
-                          supermarket.location.lat,
-                          supermarket.location.lng
+                          supermarket.latitude,
+                          supermarket.longitude
                         ).toFixed(1)}{" "}
                         km
                       </div>

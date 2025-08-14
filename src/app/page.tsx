@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { InvoiceModal } from "@/components/InvoiceModal";
+import { MigrationModal } from "@/components/MigrationModal";
+// Import hybrid storage functions
 import {
   getSupermarkets,
   getSales,
@@ -18,10 +20,11 @@ import {
   deleteOrder,
   addPayment,
   getFragranceStock,
-  getFragrances,
   deleteSale,
-} from "@/utils/storage";
-import type { Sale, Order, Supermarket, FragranceStock } from "@/types/index";
+} from "@/utils/hybridStorage";
+import { getFragrances } from "@/utils/storage";
+import { isMigrationNeeded } from "@/utils/migration";
+import type { Sale, Order, Supermarket, FragranceStock, PhoneNumber } from "@/utils/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -114,6 +117,8 @@ export default function Dashboard() {
     quantity: number;
     orderId?: string;
   } | null>(null);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [migrationChecked, setMigrationChecked] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     monthlySales: {
       quantity: 0,
@@ -132,10 +137,12 @@ export default function Dashboard() {
     Record<string, MonthlyData>
   >({});
 
+
+
   // Create a function to update dashboard data that can be reused
-  const updateDashboardData = () => {
+  const updateDashboardData = useCallback(async () => {
     // Get current month's sales
-    const allSales = getSales();
+    const allSales = await getSales();
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
@@ -185,10 +192,15 @@ export default function Dashboard() {
       return acc + sale.quantity * supplierCostPerUnit;
     }, 0);
 
-    const currentStock = getCurrentStock();
+    const currentStock = await getCurrentStock();
+    console.log("Dashboard - Raw current stock (cartons):", currentStock);
+    console.log("Dashboard - Displayed stock (units):", currentStock * 9);
 
     // Get fragrance stock data for the pie chart
-    const fragranceData = getFragranceStock().map((fragrance) => ({
+    const fragranceStock = await getFragranceStock();
+    console.log("Dashboard - Fragrance stock:", fragranceStock);
+    console.log("Dashboard - Individual fragrance quantities:", fragranceStock.map(f => `${f.name}: ${f.quantity}`));
+    const fragranceData = fragranceStock.map((fragrance) => ({
       name: fragrance.name,
       value: fragrance.quantity,
       color: fragrance.color,
@@ -230,11 +242,11 @@ export default function Dashboard() {
       salesData,
       fragranceStock: fragranceData,
     });
-  };
+  }, []);
 
   // Calculate monthly benefits data
-  const calculateMonthlyBenefits = () => {
-    const allSales = getSales();
+  const calculateMonthlyBenefits = useCallback(async () => {
+    const allSales = await getSales();
     const monthlyData: Record<string, MonthlyData> = {};
 
     allSales.forEach((sale) => {
@@ -265,20 +277,47 @@ export default function Dashboard() {
     });
 
     setMonthlyBenefits(monthlyData);
+  }, []);
+
+  // Migration handlers
+  const loadDashboardData = useCallback(async () => {
+    await updateDashboardData();
+    await calculateMonthlyBenefits();
+  }, [updateDashboardData, calculateMonthlyBenefits]);
+
+  const handleMigrationComplete = () => {
+    setShowMigrationModal(false);
+    loadDashboardData();
   };
 
-  // Load and update dashboard data
+  const handleMigrationClose = () => {
+    setShowMigrationModal(false);
+    loadDashboardData();
+  };
+
+  // Check for migration need and load data
   useEffect(() => {
-    // Initial load
-    updateDashboardData();
+    if (!migrationChecked) {
+      const needsMigration = isMigrationNeeded();
+      if (needsMigration) {
+        setShowMigrationModal(true);
+      } else {
+        loadDashboardData();
+      }
+      setMigrationChecked(true);
+    }
 
     // Set up interval to update data every minute
-    const interval = setInterval(updateDashboardData, 60000);
+    const interval = setInterval(() => {
+      if (!showMigrationModal) {
+        updateDashboardData();
+      }
+    }, 60000);
 
     // Add event listener for saleDataChanged event
-    const handleSaleDataChanged = () => {
-      updateDashboardData();
-      calculateMonthlyBenefits();
+    const handleSaleDataChanged = async () => {
+      await updateDashboardData();
+      await calculateMonthlyBenefits();
     };
 
     window.addEventListener("saleDataChanged", handleSaleDataChanged);
@@ -288,12 +327,12 @@ export default function Dashboard() {
       clearInterval(interval);
       window.removeEventListener("saleDataChanged", handleSaleDataChanged);
     };
-  }, []);
+  }, [migrationChecked, loadDashboardData, showMigrationModal, updateDashboardData, calculateMonthlyBenefits]);
 
   // Update monthly benefits
   useEffect(() => {
     calculateMonthlyBenefits();
-  }, []);
+  }, [calculateMonthlyBenefits]);
 
   // Add this effect to check localStorage for active tab
   useEffect(() => {
@@ -387,10 +426,10 @@ export default function Dashboard() {
                     <span className="text-sm font-medium text-amber-600">
                       {dashboardData.monthlySales.profit > 0
                         ? Math.round(
-                            (dashboardData.monthlySales.paidProfit /
-                              dashboardData.monthlySales.profit) *
-                              100
-                          )
+                          (dashboardData.monthlySales.paidProfit /
+                            dashboardData.monthlySales.profit) *
+                          100
+                        )
                         : 0}
                       %
                     </span>
@@ -427,9 +466,8 @@ export default function Dashboard() {
                     <div
                       className="h-full rounded-full bg-purple-500 transition-all duration-500"
                       style={{
-                        width: `${
-                          (dashboardData.monthlySales.stock / 2700) * 100
-                        }%`,
+                        width: `${(dashboardData.monthlySales.stock / 2700) * 100
+                          }%`,
                       }}
                     />
                   </div>
@@ -456,7 +494,7 @@ export default function Dashboard() {
                       {Math.round(
                         (dashboardData.monthlySales.supplierPayment /
                           dashboardData.monthlySales.revenue) *
-                          100
+                        100
                       )}
                       %
                     </div>
@@ -878,16 +916,14 @@ export default function Dashboard() {
           onClick={() => setActiveTab("dashboard")}
         >
           <Home
-            className={`h-5 w-5 transition-colors duration-200 ${
-              activeTab === "dashboard" ? "text-white" : "text-gray-500"
-            }`}
+            className={`h-5 w-5 transition-colors duration-200 ${activeTab === "dashboard" ? "text-white" : "text-gray-500"
+              }`}
           />
           <span
-            className={`ml-2 transition-colors duration-200 ${
-              activeTab === "dashboard"
-                ? "text-white font-medium"
-                : "text-gray-500"
-            }`}
+            className={`ml-2 transition-colors duration-200 ${activeTab === "dashboard"
+              ? "text-white font-medium"
+              : "text-gray-500"
+              }`}
           >
             Tableau de Bord
           </span>
@@ -916,9 +952,8 @@ export default function Dashboard() {
               }}
             >
               <ShoppingCart
-                className={`h-5 w-5 mr-2 ${
-                  activeTab === "add-sale" ? "text-white" : "text-gray-500"
-                }`}
+                className={`h-5 w-5 mr-2 ${activeTab === "add-sale" ? "text-white" : "text-gray-500"
+                  }`}
               />
               <span
                 className={
@@ -938,9 +973,8 @@ export default function Dashboard() {
               }}
             >
               <Store
-                className={`h-5 w-5 mr-2 ${
-                  activeTab === "supermarkets" ? "text-white" : "text-gray-500"
-                }`}
+                className={`h-5 w-5 mr-2 ${activeTab === "supermarkets" ? "text-white" : "text-gray-500"
+                  }`}
               />
               <span
                 className={
@@ -960,9 +994,8 @@ export default function Dashboard() {
               }}
             >
               <Package
-                className={`h-5 w-5 mr-2 ${
-                  activeTab === "stock" ? "text-white" : "text-gray-500"
-                }`}
+                className={`h-5 w-5 mr-2 ${activeTab === "stock" ? "text-white" : "text-gray-500"
+                  }`}
               />
               <span
                 className={
@@ -982,9 +1015,8 @@ export default function Dashboard() {
               }}
             >
               <Calendar
-                className={`h-5 w-5 mr-2 ${
-                  activeTab === "orders" ? "text-white" : "text-gray-500"
-                }`}
+                className={`h-5 w-5 mr-2 ${activeTab === "orders" ? "text-white" : "text-gray-500"
+                  }`}
               />
               <span
                 className={
@@ -1015,6 +1047,13 @@ export default function Dashboard() {
       {/* Add padding to account for fixed top navigation */}
       <div className="pt-20">{renderContent()}</div>
       <ClearDataButton />
+
+      {/* Migration Modal */}
+      <MigrationModal
+        isOpen={showMigrationModal}
+        onClose={handleMigrationClose}
+        onComplete={handleMigrationComplete}
+      />
     </main>
   );
 }
@@ -1048,31 +1087,47 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
 
   // Load fragrance data
   useEffect(() => {
-    setFragranceStock(getFragranceStock());
+    const loadFragranceStock = async () => {
+      const stock = await getFragranceStock();
+      setFragranceStock(stock);
+    };
+    loadFragranceStock();
 
     // Initialize fragrance distribution
-    const initialDistribution: Record<string, number> = {};
-    getFragrances().forEach(
-      (fragrance: { id: string; name: string; color: string }) => {
-        initialDistribution[fragrance.id] = 0;
-      }
-    );
-    setFragranceDistribution(initialDistribution);
+    const initializeDistribution = async () => {
+      const fragrances = await getFragrances();
+      const initialDistribution: Record<string, number> = {};
+      fragrances.forEach(
+        (fragrance: { id: string; name: string; color: string }) => {
+          initialDistribution[fragrance.id] = 0;
+        }
+      );
+      setFragranceDistribution(initialDistribution);
+    };
+    initializeDistribution();
 
     // Initialize filtered supermarkets
-    setFilteredSupermarkets(getSupermarkets());
+    const loadSupermarkets = async () => {
+      const supermarkets = await getSupermarkets();
+      setFilteredSupermarkets(supermarkets);
+    };
+    loadSupermarkets();
   }, []);
 
   // Filter supermarkets when search query changes
   useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredSupermarkets(getSupermarkets());
-    } else {
-      const filtered = getSupermarkets().filter((sm) =>
-        sm.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredSupermarkets(filtered);
-    }
+    const filterSupermarkets = async () => {
+      const supermarkets = await getSupermarkets();
+      if (searchQuery.trim() === "") {
+        setFilteredSupermarkets(supermarkets);
+      } else {
+        const filtered = supermarkets.filter((sm) =>
+          sm.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setFilteredSupermarkets(filtered);
+      }
+    };
+    filterSupermarkets();
   }, [searchQuery]);
 
   // Calculate quantity based on cartons (9 pieces per carton)
@@ -1151,15 +1206,15 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       expectedPaymentDate: !isPaidImmediately ? expectedPaymentDate : "",
       payments: isPaidImmediately
         ? [
-            {
-              id: Date.now().toString(),
-              date: saleDate
-                ? new Date(saleDate).toISOString()
-                : new Date().toISOString(),
-              amount: totalValue,
-              note: "Paiement complet",
-            },
-          ]
+          {
+            id: Date.now().toString(),
+            date: saleDate
+              ? new Date(saleDate).toISOString()
+              : new Date().toISOString(),
+            amount: totalValue,
+            note: "Paiement complet",
+          },
+        ]
         : [],
       remainingAmount: isPaidImmediately ? 0 : totalValue,
       fragranceDistribution: fragranceDistribution,
@@ -1378,10 +1433,10 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                 (sum, qty) => sum + qty,
                 0
               ) !== cartons && (
-                <div className="text-red-500 font-medium">
-                  Les quantités doivent correspondre exactement
-                </div>
-              )}
+                  <div className="text-red-500 font-medium">
+                    Les quantités doivent correspondre exactement
+                  </div>
+                )}
             </div>
           </div>
         )}
@@ -1403,21 +1458,19 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
             <Button
               type="button"
               variant={priceOption === "option1" ? "default" : "outline"}
-              className={`w-full rounded-xl py-3 px-4 h-auto ${
-                priceOption === "option1"
-                  ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
-                  : "bg-white hover:bg-gray-50 border-gray-200"
-              }`}
+              className={`w-full rounded-xl py-3 px-4 h-auto ${priceOption === "option1"
+                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
+                : "bg-white hover:bg-gray-50 border-gray-200"
+                }`}
               onClick={() => setPriceOption("option1")}
             >
               <div className="text-left">
                 <div className="font-medium text-base">180 DZD</div>
                 <div
-                  className={`text-xs ${
-                    priceOption === "option1"
-                      ? "text-blue-100"
-                      : "text-gray-500"
-                  }`}
+                  className={`text-xs ${priceOption === "option1"
+                    ? "text-blue-100"
+                    : "text-gray-500"
+                    }`}
                 >
                   Retour: 155 DZD/unité
                 </div>
@@ -1426,21 +1479,19 @@ function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
             <Button
               type="button"
               variant={priceOption === "option2" ? "default" : "outline"}
-              className={`w-full rounded-xl py-3 px-4 h-auto ${
-                priceOption === "option2"
-                  ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
-                  : "bg-white hover:bg-gray-50 border-gray-200"
-              }`}
+              className={`w-full rounded-xl py-3 px-4 h-auto ${priceOption === "option2"
+                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
+                : "bg-white hover:bg-gray-50 border-gray-200"
+                }`}
               onClick={() => setPriceOption("option2")}
             >
               <div className="text-left">
                 <div className="font-medium text-base">180 DZD</div>
                 <div
-                  className={`text-xs ${
-                    priceOption === "option2"
-                      ? "text-blue-100"
-                      : "text-gray-500"
-                  }`}
+                  className={`text-xs ${priceOption === "option2"
+                    ? "text-blue-100"
+                    : "text-gray-500"
+                    }`}
                 >
                   Retour: 163 DZD/unité
                 </div>
@@ -1545,21 +1596,21 @@ function SupermarketsPage({
   const [newSupermarket, setNewSupermarket] = useState({
     name: "",
     address: "",
-    phoneNumbers: [{ name: "", number: "" }],
+    phone_numbers: [{ name: "", number: "" }],
     email: "",
-    location: {
-      lat: 36.7538,
-      lng: 3.0588,
-      formattedAddress: "",
-    },
+    latitude: 36.7538,
+    longitude: 3.0588,
   });
   const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Load supermarkets on component mount
   useEffect(() => {
-    const loadedSupermarkets = getSupermarkets();
-    setSupermarkets(loadedSupermarkets);
+    const loadSupermarkets = async () => {
+      const loadedSupermarkets = await getSupermarkets();
+      setSupermarkets(loadedSupermarkets);
+    };
+    loadSupermarkets();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1568,61 +1619,80 @@ function SupermarketsPage({
 
     try {
       // Make sure at least one phone number is provided
-      if (!newSupermarket.phoneNumbers[0].number) {
+      if (!newSupermarket.phone_numbers[0].number) {
         alert("Veuillez entrer au moins un numéro de téléphone");
         setLoading(false);
         return;
       }
 
-      // Geocode the address
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          newSupermarket.address
-        )}`
-      );
-      const data = await response.json();
+      // Try to geocode the address, but use default coordinates if it fails
+      let latitude = 36.7538; // Default coordinates for Algeria
+      let longitude = 3.0588;
 
-      if (data && data.length > 0) {
-        const location = {
-          lat: parseFloat(data[0].lat),
-          lng: parseFloat(data[0].lon),
-          formattedAddress: data[0].display_name,
-        };
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-        // Create a properly formatted supermarket object
-        const supermarketWithLocation = {
-          name: newSupermarket.name,
-          address: newSupermarket.address,
-          phoneNumbers: newSupermarket.phoneNumbers.filter(
-            (p) => p.number.trim() !== ""
-          ),
-          location,
-          email: newSupermarket.email || undefined,
-        };
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            newSupermarket.address
+          )}`,
+          { signal: controller.signal }
+        );
 
-        console.log("Adding supermarket:", supermarketWithLocation);
+        clearTimeout(timeoutId);
+        const data = await response.json();
 
-        // Add the supermarket
-        const added = addSupermarket(supermarketWithLocation);
-        console.log("Added supermarket result:", added);
+        if (data && data.length > 0) {
+          latitude = parseFloat(data[0].lat);
+          longitude = parseFloat(data[0].lon);
+          console.log("Geocoding successful:", { latitude, longitude });
+        } else {
+          console.log("Geocoding failed, using default coordinates");
+        }
+      } catch (geocodingError) {
+        console.log("Geocoding service unavailable, using default coordinates:", geocodingError);
+      }
 
-        // Reset form and state
+      // Create a properly formatted supermarket object for Supabase
+      const supabaseSupermarket = {
+        name: newSupermarket.name,
+        address: newSupermarket.address,
+        latitude: latitude,
+        longitude: longitude,
+        email: newSupermarket.email || null,
+        phone_numbers: newSupermarket.phone_numbers.filter(
+          (p: PhoneNumber) => p.number.trim() !== ""
+        ),
+      };
+
+      console.log("Adding supermarket:", supabaseSupermarket);
+
+      // Add the supermarket
+      const added = await addSupermarket(supabaseSupermarket);
+      console.log("Added supermarket result:", added);
+
+      if (added) {
+        // Success - reset form and state
         setShowAddForm(false);
+        alert("Supermarché ajouté avec succès!");
+
+        // Reset form
         setNewSupermarket({
           name: "",
           address: "",
-          phoneNumbers: [{ name: "", number: "" }],
+          phone_numbers: [{ name: "", number: "" }],
           email: "",
-          location: {
-            lat: 36.7538,
-            lng: 3.0588,
-            formattedAddress: "",
-          },
+          latitude: 36.7538,
+          longitude: 3.0588,
         });
 
         // Refresh the supermarkets list
-        const loadedSupermarkets = getSupermarkets();
+        const loadedSupermarkets = await getSupermarkets();
         setSupermarkets(loadedSupermarkets);
+      } else {
+        // Failed to add
+        alert("Erreur: Impossible d'ajouter le supermarché. Vérifiez la console pour plus de détails.");
       }
     } catch (error) {
       console.error("Error adding supermarket:", error);
@@ -1701,11 +1771,11 @@ function SupermarketsPage({
                   type="text"
                   placeholder="Nom du contact"
                   className="flex-1 h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
-                  value={newSupermarket.phoneNumbers[0].name}
+                  value={newSupermarket.phone_numbers[0].name}
                   onChange={(e) =>
                     setNewSupermarket((prev) => ({
                       ...prev,
-                      phoneNumbers: prev.phoneNumbers.map((phone, index) =>
+                      phone_numbers: prev.phone_numbers.map((phone, index) =>
                         index === 0 ? { ...phone, name: e.target.value } : phone
                       ),
                     }))
@@ -1715,11 +1785,11 @@ function SupermarketsPage({
                   type="tel"
                   placeholder="Numéro de téléphone"
                   className="flex-1 h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
-                  value={newSupermarket.phoneNumbers[0].number}
+                  value={newSupermarket.phone_numbers[0].number}
                   onChange={(e) =>
                     setNewSupermarket((prev) => ({
                       ...prev,
-                      phoneNumbers: prev.phoneNumbers.map((phone, index) =>
+                      phone_numbers: prev.phone_numbers.map((phone, index) =>
                         index === 0
                           ? { ...phone, number: e.target.value }
                           : phone
@@ -1780,16 +1850,12 @@ function SupermarketsPage({
               <div>
                 <h3 className="font-medium">{supermarket.name}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Total des ventes:{" "}
-                  {supermarket.totalValue.toLocaleString("fr-DZ")} DZD
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {supermarket.location.formattedAddress}
+                  {supermarket.address}
                 </p>
               </div>
               <div className="text-right">
                 <p className="font-medium">
-                  {Math.ceil(supermarket.totalSales / 9)} cartons
+                  Voir détails
                 </p>
                 <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
               </div>
@@ -1827,16 +1893,20 @@ function SupermarketProfilePage({
   const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load supermarket data
-    const sm = getSupermarkets().find((s) => s.id === supermarketId);
-    setSupermarket(sm || null);
+    const loadData = async () => {
+      // Load supermarket data
+      const supermarkets = await getSupermarkets();
+      const sm = supermarkets.find((s) => s.id === supermarketId);
+      setSupermarket(sm || null);
 
-    // Load all sales for this supermarket
-    const allSales = getSales();
-    const filteredSales = allSales.filter(
-      (sale) => sale.supermarketId === supermarketId
-    );
-    setSalesHistory(filteredSales);
+      // Load all sales for this supermarket
+      const allSales = await getSales();
+      const filteredSales = allSales.filter(
+        (sale) => sale.supermarketId === supermarketId
+      );
+      setSalesHistory(filteredSales);
+    };
+    loadData();
   }, [supermarketId]);
 
   const handleEdit = () => {
@@ -1844,13 +1914,10 @@ function SupermarketProfilePage({
     setEditedSupermarket({
       name: supermarket?.name || "",
       address: supermarket?.address || "",
-      phoneNumbers: supermarket?.phoneNumbers || [],
+      phone_numbers: supermarket?.phone_numbers || [],
       email: supermarket?.email || "",
-      location: supermarket?.location || {
-        lat: 36.7538,
-        lng: 3.0588,
-        formattedAddress: "",
-      },
+      latitude: supermarket?.latitude || 36.7538,
+      longitude: supermarket?.longitude || 3.0588,
     });
   };
 
@@ -1858,7 +1925,7 @@ function SupermarketProfilePage({
     if (newPhoneNumber.name && newPhoneNumber.number) {
       setEditedSupermarket((prev) => ({
         ...prev,
-        phoneNumbers: [...(prev.phoneNumbers || []), newPhoneNumber],
+        phone_numbers: [...(prev.phone_numbers || []), newPhoneNumber],
       }));
       setNewPhoneNumber({ name: "", number: "" });
     }
@@ -1867,7 +1934,7 @@ function SupermarketProfilePage({
   const handleRemovePhoneNumber = (index: number) => {
     setEditedSupermarket((prev) => ({
       ...prev,
-      phoneNumbers: prev.phoneNumbers?.filter((_, i) => i !== index),
+      phone_numbers: prev.phone_numbers?.filter((_: PhoneNumber, i: number) => i !== index),
     }));
   };
 
@@ -1878,7 +1945,7 @@ function SupermarketProfilePage({
   ) => {
     setEditedSupermarket((prev) => ({
       ...prev,
-      phoneNumbers: prev.phoneNumbers?.map((phone, i) =>
+      phone_numbers: prev.phone_numbers?.map((phone: PhoneNumber, i: number) =>
         i === index ? { ...phone, [field]: value } : phone
       ),
     }));
@@ -1895,11 +1962,14 @@ function SupermarketProfilePage({
       deleteSale(saleToDelete);
 
       // Refresh the sales history
-      const allSales = getSales();
-      const filteredSales = allSales.filter(
-        (sale) => sale.supermarketId === supermarketId
-      );
-      setSalesHistory(filteredSales);
+      const refreshSales = async () => {
+        const allSales = await getSales();
+        const filteredSales = allSales.filter(
+          (sale) => sale.supermarketId === supermarketId
+        );
+        setSalesHistory(filteredSales);
+      };
+      refreshSales();
 
       // Close the confirmation dialog
       setShowDeleteConfirm(false);
@@ -1929,16 +1999,13 @@ function SupermarketProfilePage({
         const data = await response.json();
 
         if (data && data.length > 0) {
-          editedSupermarket.location = {
-            lat: parseFloat(data[0].lat),
-            lng: parseFloat(data[0].lon),
-            formattedAddress: data[0].display_name,
-          };
+          editedSupermarket.latitude = parseFloat(data[0].lat);
+          editedSupermarket.longitude = parseFloat(data[0].lon);
         }
       }
 
       // Update the supermarket
-      const updatedSupermarket = updateSupermarket(
+      const updatedSupermarket = await updateSupermarket(
         supermarket.id,
         editedSupermarket
       );
@@ -1960,8 +2027,8 @@ function SupermarketProfilePage({
     setEditedSupermarket({});
   };
 
-  const handlePaymentUpdate = (saleId: string, isPaid: boolean) => {
-    const updatedSale = updateSalePayment(saleId, isPaid);
+  const handlePaymentUpdate = async (saleId: string, isPaid: boolean) => {
+    const updatedSale = await updateSalePayment(saleId, isPaid);
     if (updatedSale) {
       // Update the sale in the sales history
       setSalesHistory((prev) =>
@@ -1981,7 +2048,7 @@ function SupermarketProfilePage({
       totalNetBenefit:
         acc.totalNetBenefit +
         sale.quantity *
-          (sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0),
+        (sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0),
     }),
     {
       totalQuantity: 0,
@@ -2126,7 +2193,7 @@ function SupermarketProfilePage({
                       </div>
                     </div>
                     <div className="space-y-2">
-                      {editedSupermarket.phoneNumbers?.map((phone, index) => (
+                      {editedSupermarket.phone_numbers?.map((phone: PhoneNumber, index: number) => (
                         <div
                           key={index}
                           className="flex flex-col sm:flex-row gap-2 items-start sm:items-center"
@@ -2181,7 +2248,7 @@ function SupermarketProfilePage({
                 ) : (
                   <>
                     <div className="space-y-1">
-                      {supermarket.phoneNumbers?.map((phone, index) => (
+                      {supermarket.phone_numbers?.map((phone: PhoneNumber, index: number) => (
                         <div
                           key={index}
                           className="flex flex-col sm:flex-row items-start sm:items-center gap-2"
@@ -2356,9 +2423,9 @@ function SupermarketProfilePage({
           </h2>
           <button
             className="text-blue-600 flex items-center text-sm"
-            onClick={() => {
+            onClick={async () => {
               // Refresh data
-              const allSales = getSales();
+              const allSales = await getSales();
               const filteredSales = allSales.filter(
                 (sale) => sale.supermarketId === supermarketId
               );
@@ -2389,9 +2456,8 @@ function SupermarketProfilePage({
           .map((sale, index) => (
             <div
               key={sale.id}
-              className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm transition-all duration-300 cursor-pointer hover:shadow-md animate-in slide-in-from-bottom ${
-                !sale.isPaid ? "border-red-200" : "border-green-200"
-              }`}
+              className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm transition-all duration-300 cursor-pointer hover:shadow-md animate-in slide-in-from-bottom ${!sale.isPaid ? "border-red-200" : "border-green-200"
+                }`}
               style={{ animationDelay: `${index * 50}ms` }}
               onClick={() => {
                 setSelectedSale(sale);
@@ -2607,11 +2673,10 @@ function SupermarketProfilePage({
                 <p className="text-sm text-gray-500">Statut de paiement</p>
                 <div className="flex items-center">
                   <div
-                    className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-                      selectedSale.isPaid
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
+                    className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${selectedSale.isPaid
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                      }`}
                   >
                     {selectedSale.isPaid ? "Payé" : "Non payé"}
                   </div>
@@ -2828,10 +2893,22 @@ function StockPage({ onBack }: StockPageProps) {
   const [isAddingMode, setIsAddingMode] = useState<boolean>(true);
 
   // Function to load stock data
-  const loadStockData = useCallback(() => {
-    setStockHistory(getStockHistory());
+  const loadStockData = useCallback(async () => {
+    const history = await getStockHistory();
+    setStockHistory(history);
     // Current stock is now calculated from fragrance stock
-    const fragStock = getFragranceStock();
+    let fragStock = await getFragranceStock();
+    console.log("Loaded fragrance stock:", fragStock);
+    console.log("Fragrance stock details:", fragStock.map(f => `${f.name}: ${f.quantity}`));
+
+    // If fragrance stock is empty, try to initialize it
+    if (fragStock.length === 0) {
+      console.log("Fragrance stock is empty, initializing...");
+      const { initializeFragranceStock } = await import("@/utils/storage");
+      fragStock = await initializeFragranceStock();
+      console.log("Initialized fragrance stock:", fragStock);
+    }
+
     setFragranceStock(fragStock);
     // Calculate current stock based on fragrance stock
     const totalStock = fragStock.reduce(
@@ -2846,13 +2923,17 @@ function StockPage({ onBack }: StockPageProps) {
     loadStockData();
 
     // Initialize fragrance distribution
-    const initialDistribution: Record<string, number> = {};
-    getFragrances().forEach(
-      (fragrance: { id: string; name: string; color: string }) => {
-        initialDistribution[fragrance.id] = 0;
-      }
-    );
-    setFragranceDistribution(initialDistribution);
+    const initializeDistribution = async () => {
+      const fragrances = await getFragrances();
+      const initialDistribution: Record<string, number> = {};
+      fragrances.forEach(
+        (fragrance: { id: string; name: string; color: string }) => {
+          initialDistribution[fragrance.id] = 0;
+        }
+      );
+      setFragranceDistribution(initialDistribution);
+    };
+    initializeDistribution();
 
     // Add event listener for saleDataChanged event
     const handleSaleDataChanged = () => {
@@ -2867,7 +2948,7 @@ function StockPage({ onBack }: StockPageProps) {
     };
   }, [loadStockData]);
 
-  const handleAdjustStock = (e: React.FormEvent): void => {
+  const handleAdjustStock = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
 
     // Determine if this is an incremental addition or a complete adjustment
@@ -2904,7 +2985,7 @@ function StockPage({ onBack }: StockPageProps) {
         );
       } else {
         // If fragrance form not used, distribute added stock evenly
-        const allFragrances = getFragrances();
+        const allFragrances = await getFragrances();
         const fragranceCount = allFragrances.length;
         const baseAmount = Math.floor(amountToAdd / fragranceCount);
         const remainder = amountToAdd % fragranceCount;
@@ -2945,7 +3026,7 @@ function StockPage({ onBack }: StockPageProps) {
 
         // This represents a completely new stock allocation
         // First, save the current fragrance stock to calculate differences
-        const currentFragranceStock = getFragranceStock();
+        const currentFragranceStock = await getFragranceStock();
         const fragranceChanges: Record<string, number> = {};
 
         // Calculate the difference between new distribution and current stock for each fragrance
@@ -2964,7 +3045,7 @@ function StockPage({ onBack }: StockPageProps) {
         );
       } else {
         // If fragrance form not used, distribute stock evenly
-        const allFragrances = getFragrances();
+        const allFragrances = await getFragrances();
         const fragranceCount = allFragrances.length;
         const baseAmount = Math.floor(newStock.cartons / fragranceCount);
         const remainder = newStock.cartons % fragranceCount;
@@ -2977,7 +3058,7 @@ function StockPage({ onBack }: StockPageProps) {
         });
 
         // Calculate changes from current stock
-        const currentFragranceStock = getFragranceStock();
+        const currentFragranceStock = await getFragranceStock();
         const fragranceChanges: Record<string, number> = {};
 
         currentFragranceStock.forEach((fragrance: FragranceStock) => {
@@ -2996,8 +3077,14 @@ function StockPage({ onBack }: StockPageProps) {
       }
     }
 
-    // Reload the page to refresh all data
-    window.location.reload();
+    // Refresh the stock data after successful update
+    await loadStockData();
+
+    // Reset the form
+    setShowAdjustForm(false);
+    setNewStock({ cartons: 0 });
+    setShowFragranceForm(false);
+    await resetFragranceDistribution();
   };
 
   const handleFragranceChange = (fragranceId: string, value: number): void => {
@@ -3005,6 +3092,17 @@ function StockPage({ onBack }: StockPageProps) {
       ...prev,
       [fragranceId]: value,
     }));
+  };
+
+  const resetFragranceDistribution = async () => {
+    if (showFragranceForm) {
+      const fragrances = await getFragrances();
+      const resetDistribution: Record<string, number> = {};
+      fragrances.forEach((fragrance) => {
+        resetDistribution[fragrance.id] = 0;
+      });
+      setFragranceDistribution(resetDistribution);
+    }
   };
 
   return (
@@ -3095,12 +3193,12 @@ function StockPage({ onBack }: StockPageProps) {
                 <Button
                   type="button"
                   variant={isAddingMode ? "default" : "outline"}
-                  className={`rounded-md ${
-                    isAddingMode ? "bg-purple-600" : ""
-                  }`}
-                  onClick={() => {
+                  className={`rounded-md ${isAddingMode ? "bg-purple-600" : ""
+                    }`}
+                  onClick={async () => {
                     setIsAddingMode(true);
                     setNewStock({ cartons: 0 });
+                    await resetFragranceDistribution();
                   }}
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -3109,12 +3207,12 @@ function StockPage({ onBack }: StockPageProps) {
                 <Button
                   type="button"
                   variant={!isAddingMode ? "default" : "outline"}
-                  className={`rounded-md ${
-                    !isAddingMode ? "bg-purple-600" : ""
-                  }`}
-                  onClick={() => {
+                  className={`rounded-md ${!isAddingMode ? "bg-purple-600" : ""
+                    }`}
+                  onClick={async () => {
                     setIsAddingMode(false);
                     setNewStock({ cartons: currentStock });
+                    await resetFragranceDistribution();
                   }}
                 >
                   <Settings className="mr-2 h-4 w-4" />
@@ -3134,9 +3232,10 @@ function StockPage({ onBack }: StockPageProps) {
                   type="button"
                   variant="outline"
                   className="rounded-l-xl h-12 w-12 flex items-center justify-center border-gray-200"
-                  onClick={() =>
-                    setNewStock({ cartons: Math.max(0, newStock.cartons - 1) })
-                  }
+                  onClick={async () => {
+                    setNewStock({ cartons: Math.max(0, newStock.cartons - 1) });
+                    await resetFragranceDistribution();
+                  }}
                 >
                   <Minus className="h-4 w-4" />
                 </Button>
@@ -3144,9 +3243,10 @@ function StockPage({ onBack }: StockPageProps) {
                   type="number"
                   className="flex-1 h-12 text-center border-x-0 border-y border-gray-200"
                   value={newStock.cartons}
-                  onChange={(e) =>
-                    setNewStock({ cartons: parseInt(e.target.value) || 0 })
-                  }
+                  onChange={async (e) => {
+                    setNewStock({ cartons: parseInt(e.target.value) || 0 });
+                    await resetFragranceDistribution();
+                  }}
                   min="0"
                   max="300"
                   required
@@ -3155,11 +3255,12 @@ function StockPage({ onBack }: StockPageProps) {
                   type="button"
                   variant="outline"
                   className="rounded-r-xl h-12 w-12 flex items-center justify-center border-gray-200"
-                  onClick={() =>
+                  onClick={async () => {
                     setNewStock({
                       cartons: Math.min(300, newStock.cartons + 1),
-                    })
-                  }
+                    });
+                    await resetFragranceDistribution();
+                  }}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -3175,15 +3276,15 @@ function StockPage({ onBack }: StockPageProps) {
                       newStock.cartons > currentStock
                         ? "text-green-600"
                         : newStock.cartons < currentStock
-                        ? "text-red-600"
-                        : ""
+                          ? "text-red-600"
+                          : ""
                     }
                   >
                     {newStock.cartons > currentStock
                       ? `+${newStock.cartons - currentStock}`
                       : newStock.cartons < currentStock
-                      ? `${newStock.cartons - currentStock}`
-                      : "Aucun changement"}
+                        ? `${newStock.cartons - currentStock}`
+                        : "Aucun changement"}
                   </p>
                 )}
               </div>
@@ -3203,9 +3304,18 @@ function StockPage({ onBack }: StockPageProps) {
                   </div>
                   <Switch
                     checked={showFragranceForm}
-                    onCheckedChange={() =>
-                      setShowFragranceForm(!showFragranceForm)
-                    }
+                    onCheckedChange={async (checked) => {
+                      setShowFragranceForm(checked);
+                      if (checked) {
+                        // Reset fragrance distribution when enabling the form
+                        const fragrances = await getFragrances();
+                        const resetDistribution: Record<string, number> = {};
+                        fragrances.forEach((fragrance) => {
+                          resetDistribution[fragrance.id] = 0;
+                        });
+                        setFragranceDistribution(resetDistribution);
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -3217,8 +3327,19 @@ function StockPage({ onBack }: StockPageProps) {
                 <h3 className="text-sm font-medium text-purple-700">
                   Distribution du stock ({newStock.cartons} cartons au total)
                 </h3>
+                {/* Debug info */}
+                <div className="text-xs text-gray-500">
+                  Debug: fragranceStock.length = {fragranceStock.length}
+                  {fragranceStock.length === 0 && " (No fragrances loaded!)"}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {fragranceStock.map((fragrance) => (
+                  {(fragranceStock.length > 0 ? fragranceStock : [
+                    { fragranceId: '1', name: 'Lavande', quantity: 0, color: '#9F7AEA' },
+                    { fragranceId: '2', name: 'Rose', quantity: 0, color: '#F687B3' },
+                    { fragranceId: '3', name: 'Citron', quantity: 0, color: '#FBBF24' },
+                    { fragranceId: '4', name: 'Fraîcheur Marine', quantity: 0, color: '#60A5FA' },
+                    { fragranceId: '5', name: 'Vanille', quantity: 0, color: '#F59E0B' }
+                  ]).map((fragrance) => (
                     <div key={fragrance.fragranceId} className="space-y-1">
                       <div className="flex items-center">
                         <div
@@ -3293,10 +3414,10 @@ function StockPage({ onBack }: StockPageProps) {
                     (sum, qty) => sum + qty,
                     0
                   ) !== newStock.cartons && (
-                    <div className="text-red-500 font-medium mt-1">
-                      Le total doit correspondre exactement au stock total
-                    </div>
-                  )}
+                      <div className="text-red-500 font-medium mt-1">
+                        Le total doit correspondre exactement au stock total
+                      </div>
+                    )}
                 </div>
               </div>
             )}
@@ -3344,19 +3465,18 @@ function StockPage({ onBack }: StockPageProps) {
                       {"type" in item && item.type === "adjusted"
                         ? "Ajustement"
                         : "type" in item && item.type === "removed"
-                        ? "Vente"
-                        : "Livraison"}
+                          ? "Vente"
+                          : "Livraison"}
                     </p>
                   </div>
                   <div className="text-right">
                     <p
-                      className={`text-base font-medium ${
-                        item.quantity > 0
-                          ? "text-green-600"
-                          : item.quantity < 0
+                      className={`text-base font-medium ${item.quantity > 0
+                        ? "text-green-600"
+                        : item.quantity < 0
                           ? "text-red-600"
                           : ""
-                      }`}
+                        }`}
                     >
                       {item.quantity > 0 ? "+" : ""}
                       {item.quantity} cartons
@@ -3426,6 +3546,7 @@ interface NewOrder {
 
 function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
   const [showForm, setShowForm] = useState<boolean>(false);
+  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
   const [newOrder, setNewOrder] = useState<NewOrder>({
     date: "",
     supermarketId: "",
@@ -3436,12 +3557,20 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
   const [orders, setOrders] = useState<Order[]>([]);
 
   // Function to load orders data
-  const loadOrdersData = useCallback(() => {
-    setOrders(getOrders());
+  const loadOrdersData = useCallback(async () => {
+    const ordersList = await getOrders();
+    setOrders(ordersList);
   }, []);
 
   useEffect(() => {
     loadOrdersData();
+
+    // Load supermarkets
+    const loadSupermarkets = async () => {
+      const supermarketsList = await getSupermarkets();
+      setSupermarkets(supermarketsList);
+    };
+    loadSupermarkets();
 
     // Add event listener for saleDataChanged event
     const handleSaleDataChanged = () => {
@@ -3456,9 +3585,10 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
     };
   }, [loadOrdersData]);
 
-  const handleSubmit = (e: React.FormEvent): void => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    const selectedSupermarket = getSupermarkets().find(
+    const supermarkets = await getSupermarkets();
+    const selectedSupermarket = supermarkets.find(
       (s) => s.id === newOrder.supermarketId
     );
 
@@ -3534,7 +3664,7 @@ function OrdersPage({ onBack, onCompleteOrder }: OrdersPageProps) {
                 required
               >
                 <option value="">Sélectionner un supermarché</option>
-                {getSupermarkets().map((sm) => (
+                {supermarkets.map((sm) => (
                   <option key={sm.id} value={sm.id}>
                     {sm.name}
                   </option>
@@ -3750,6 +3880,7 @@ function ClearDataButton() {
           </div>
         </div>
       )}
+
     </>
   );
 }
