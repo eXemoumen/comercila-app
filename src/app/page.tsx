@@ -3,12 +3,6 @@
 import React from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { DashboardOverview } from "@/components/DashboardOverview";
-import { SupermarketsPage } from "@/components/SupermarketsPage";
-import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
-import { OrdersPage } from "@/components/OrdersPage";
-import { AddSalePage } from "@/components/AddSalePage";
-import { StockPage } from "@/components/StockPage";
-import { MigrationModal } from "@/components/MigrationModal";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 
@@ -21,6 +15,16 @@ import { FullPageLoading, LoadingSpinner } from "@/components/LoadingSkeleton";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useNavigation } from "@/hooks/useNavigation";
 import { useMigration } from "@/hooks/useMigration";
+
+// Lazy-loaded page components for better performance
+import { LazyComponentWrapper } from "@/components/LazyComponentWrapper";
+
+const SupermarketsPage = React.lazy(() => import("@/components/SupermarketsPage").then(module => ({ default: module.SupermarketsPage })));
+const SupermarketProfilePage = React.lazy(() => import("@/components/SupermarketProfilePage").then(module => ({ default: module.SupermarketProfilePage })));
+const OrdersPage = React.lazy(() => import("@/components/OrdersPage").then(module => ({ default: module.OrdersPage })));
+const AddSalePage = React.lazy(() => import("@/components/AddSalePage").then(module => ({ default: module.AddSalePage })));
+const StockPage = React.lazy(() => import("@/components/StockPage").then(module => ({ default: module.StockPage })));
+const MigrationModal = React.lazy(() => import("@/components/MigrationModal").then(module => ({ default: module.MigrationModal })));
 
 export default function Dashboard() {
   // Custom hooks for state management
@@ -43,16 +47,21 @@ export default function Dashboard() {
   } = useMigration(refreshData);
 
   // Handle order completion
-  const handleCompleteOrder = (order: { id: string; supermarketId: string; quantity: number }) => {
+  const handleCompleteOrder = React.useCallback((order: { id: string; supermarketId: string; quantity: number }) => {
     navigateWithPreFill("add-sale", {
       supermarketId: order.supermarketId,
       quantity: order.quantity,
       orderId: order.id,
     });
-  };
+  }, [navigateWithPreFill]);
+
+  // Memoized navigation handlers
+  const handleBackToDashboard = React.useCallback(() => setActiveTab("dashboard"), [setActiveTab]);
+  const handleBackToSupermarkets = React.useCallback(() => setActiveTab("supermarkets"), [setActiveTab]);
+  const handleNavigateToPendingPayments = React.useCallback(() => setActiveTab("pending-payments"), [setActiveTab]);
 
   // Render main content based on active tab
-  const renderContent = () => {
+  const renderContent = React.useCallback(() => {
     switch (activeTab) {
       case "dashboard":
         return (
@@ -66,7 +75,7 @@ export default function Dashboard() {
                   variant="outline"
                   size="icon"
                   className="rounded-full h-9 w-9 border-gray-200"
-                  onClick={() => setActiveTab("pending-payments")}
+                  onClick={handleNavigateToPendingPayments}
                 >
                   <AlertCircle className="h-5 w-5 text-red-500" />
                 </Button>
@@ -86,50 +95,60 @@ export default function Dashboard() {
       case "supermarkets":
         return (
           <PageErrorBoundary pageName="Supermarchés">
-            <SupermarketsPage
-              onBack={() => setActiveTab("dashboard")}
-              onViewSupermarket={navigateToSupermarket}
-            />
+            <LazyComponentWrapper pageName="la page Supermarchés">
+              <SupermarketsPage
+                onBack={handleBackToDashboard}
+                onViewSupermarket={navigateToSupermarket}
+              />
+            </LazyComponentWrapper>
           </PageErrorBoundary>
         );
 
       case "supermarket-profile":
         return (
           <PageErrorBoundary pageName="Profil Supermarché">
-            <SupermarketProfilePage
-              onBack={() => setActiveTab("supermarkets")}
-              supermarketId={selectedSupermarketId}
-              setActiveTab={setActiveTab}
-            />
+            <LazyComponentWrapper pageName="le profil du supermarché">
+              <SupermarketProfilePage
+                onBack={handleBackToSupermarkets}
+                supermarketId={selectedSupermarketId}
+                setActiveTab={setActiveTab}
+              />
+            </LazyComponentWrapper>
           </PageErrorBoundary>
         );
 
       case "orders":
         return (
           <PageErrorBoundary pageName="Commandes">
-            <OrdersPage
-              onBack={() => setActiveTab("dashboard")}
-              onCompleteOrder={handleCompleteOrder}
-            />
+            <LazyComponentWrapper pageName="la page Commandes">
+              <OrdersPage
+                onBack={handleBackToDashboard}
+                onCompleteOrder={handleCompleteOrder}
+              />
+            </LazyComponentWrapper>
           </PageErrorBoundary>
         );
 
       case "add-sale":
         return (
           <PageErrorBoundary pageName="Nouvelle Vente">
-            <AddSalePage
-              onBack={() => setActiveTab("dashboard")}
-              preFillData={preFillSaleData}
-            />
+            <LazyComponentWrapper pageName="la page Nouvelle Vente">
+              <AddSalePage
+                onBack={handleBackToDashboard}
+                preFillData={preFillSaleData}
+              />
+            </LazyComponentWrapper>
           </PageErrorBoundary>
         );
 
       case "stock":
         return (
           <PageErrorBoundary pageName="Gestion du Stock">
-            <StockPage
-              onBack={() => setActiveTab("dashboard")}
-            />
+            <LazyComponentWrapper pageName="la page Gestion du Stock">
+              <StockPage
+                onBack={handleBackToDashboard}
+              />
+            </LazyComponentWrapper>
           </PageErrorBoundary>
         );
 
@@ -147,7 +166,7 @@ export default function Dashboard() {
           <div className="text-center py-8">
             <p className="text-gray-500">Page non trouvée</p>
             <Button
-              onClick={() => setActiveTab("dashboard")}
+              onClick={handleBackToDashboard}
               className="mt-4"
             >
               Retour au tableau de bord
@@ -155,7 +174,22 @@ export default function Dashboard() {
           </div>
         );
     }
-  };
+  }, [
+    activeTab,
+    refreshData,
+    handleNavigateToPendingPayments,
+    dashboardData,
+    monthlyBenefits,
+    setActiveTab,
+    isLoading,
+    error,
+    handleBackToDashboard,
+    navigateToSupermarket,
+    handleBackToSupermarkets,
+    selectedSupermarketId,
+    handleCompleteOrder,
+    preFillSaleData
+  ]);
 
   // Show loading state during migration check
   if (!migrationChecked) {
@@ -181,24 +215,13 @@ export default function Dashboard() {
 
       {/* Migration Modal */}
       {showMigrationModal && (
-        <ErrorBoundary
-          fallback={
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-              <div className="bg-white p-6 rounded-2xl text-center">
-                <p className="text-red-600 mb-4">Erreur lors de la migration</p>
-                <Button onClick={() => window.location.reload()}>
-                  Recharger la page
-                </Button>
-              </div>
-            </div>
-          }
-        >
+        <LazyComponentWrapper pageName="la modal de migration">
           <MigrationModal
             isOpen={showMigrationModal}
             onComplete={handleMigrationComplete}
             onClose={handleMigrationClose}
           />
-        </ErrorBoundary>
+        </LazyComponentWrapper>
       )}
     </ErrorBoundary>
   );

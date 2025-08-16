@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useMemo, useCallback } from "react";
 import {
     BarChart,
     Bar,
@@ -32,7 +33,7 @@ interface CustomTooltipProps {
     label?: string;
 }
 
-const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
+const CustomTooltip = React.memo(({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
@@ -46,7 +47,9 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
         );
     }
     return null;
-};
+});
+
+CustomTooltip.displayName = 'CustomTooltip';
 
 // French month names mapping for proper sorting
 const monthNamesMap: Record<string, number> = {
@@ -82,22 +85,57 @@ function sortMonthlyData(data: Record<string, MonthlyData>) {
     });
 }
 
-export function MonthlyBenefitsChart({
+export const MonthlyBenefitsChart = React.memo(function MonthlyBenefitsChart({
     data,
     height = 200,
     className = "",
     currentMonthProfit = 0
 }: MonthlyBenefitsChartProps) {
     // Transform and sort data for the chart
-    const chartData = sortMonthlyData(data)
-        // Take only the last 6 months of data for better visualization
-        .slice(-6)
-        .map(([month, monthData]) => ({
-            name: month.split(" ")[0].substring(0, 3), // Abbreviated month name
-            fullName: month,
-            benefit: monthData.netBenefit,
-            fill: "#22c55e",
-        }));
+    const chartData = useMemo(() => {
+        return sortMonthlyData(data)
+            // Take only the last 6 months of data for better visualization
+            .slice(-6)
+            .map(([month, monthData]) => ({
+                name: month.split(" ")[0].substring(0, 3), // Abbreviated month name
+                fullName: month,
+                benefit: monthData.netBenefit,
+                fill: "#22c55e",
+            }));
+    }, [data]);
+
+    const chartMargin = useMemo(() => ({
+        top: 5,
+        right: 5,
+        left: 5,
+        bottom: 5
+    }), []);
+
+    const tickFormatter = useCallback((value: number) =>
+        `${(value / 1000).toFixed(0)}k`,
+        []
+    );
+
+    const xAxisTick = useMemo(() => ({
+        fontSize: 12,
+        fill: '#6B7280'
+    }), []);
+
+    const yAxisTick = useMemo(() => ({
+        fontSize: 12,
+        fill: '#6B7280'
+    }), []);
+
+    const tooltipCursor = useMemo(() => ({
+        fill: 'rgba(34, 197, 94, 0.1)'
+    }), []);
+
+    const barRadius = useMemo(() => [4, 4, 0, 0] as [number, number, number, number], []);
+
+    const formattedCurrentMonthProfit = useMemo(() =>
+        currentMonthProfit.toLocaleString("fr-DZ"),
+        [currentMonthProfit]
+    );
 
     return (
         <div className={`w-full ${className}`}>
@@ -105,30 +143,30 @@ export function MonthlyBenefitsChart({
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                         data={chartData}
-                        margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+                        margin={chartMargin}
                         accessibilityLayer
                     >
                         <XAxis
                             dataKey="name"
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fontSize: 12, fill: '#6B7280' }}
+                            tick={xAxisTick}
                             aria-label="Mois"
                         />
                         <YAxis
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fontSize: 12, fill: '#6B7280' }}
-                            tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                            tick={yAxisTick}
+                            tickFormatter={tickFormatter}
                             aria-label="Bénéfice en DZD"
                         />
                         <Tooltip
                             content={<CustomTooltip />}
-                            cursor={{ fill: 'rgba(34, 197, 94, 0.1)' }}
+                            cursor={tooltipCursor}
                         />
                         <Bar
                             dataKey="benefit"
-                            radius={[4, 4, 0, 0]}
+                            radius={barRadius}
                             name="Bénéfice"
                             aria-label="Bénéfice mensuel"
                         />
@@ -140,7 +178,7 @@ export function MonthlyBenefitsChart({
             <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 rounded-b-xl">
                 Bénéfice ce mois-ci:{" "}
                 <span className="font-medium text-green-600">
-                    {currentMonthProfit.toLocaleString("fr-DZ")} DZD
+                    {formattedCurrentMonthProfit} DZD
                 </span>
                 <div className="flex items-center mt-1 gap-2">
                     <div className="flex items-center">
@@ -151,4 +189,4 @@ export function MonthlyBenefitsChart({
             </div>
         </div>
     );
-}
+});

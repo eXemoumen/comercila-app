@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { MetricCard } from "./MetricCard";
 import { CreditCard } from "lucide-react";
 
@@ -8,19 +8,25 @@ export interface SupplierPaymentCardProps {
     className?: string;
 }
 
-export const SupplierPaymentCard: React.FC<SupplierPaymentCardProps> = ({
+export const SupplierPaymentCard: React.FC<SupplierPaymentCardProps> = React.memo(function SupplierPaymentCard({
     supplierPayment,
     totalRevenue,
     className
-}) => {
-    const percentage = totalRevenue > 0
-        ? Math.round((supplierPayment / totalRevenue) * 100)
-        : 0;
+}) {
+    const percentage = useMemo(() =>
+        totalRevenue > 0 ? Math.round((supplierPayment / totalRevenue) * 100) : 0,
+        [supplierPayment, totalRevenue]
+    );
+
+    const formattedSupplierPayment = useMemo(() =>
+        supplierPayment.toLocaleString("fr-DZ"),
+        [supplierPayment]
+    );
 
     return (
         <MetricCard
             title="À Retourner au Fournisseur (Ce Mois)"
-            value={`${supplierPayment.toLocaleString("fr-DZ")} DZD`}
+            value={`${formattedSupplierPayment} DZD`}
             color="red"
             icon={CreditCard}
             percentage={percentage}
@@ -29,7 +35,7 @@ export const SupplierPaymentCard: React.FC<SupplierPaymentCardProps> = ({
             <div className="flex justify-between items-center">
                 <div>
                     <div className="text-2xl font-bold text-gray-800 animate-in slide-in-from-bottom-1 duration-300">
-                        {supplierPayment.toLocaleString("fr-DZ")} DZD
+                        {formattedSupplierPayment} DZD
                     </div>
                 </div>
                 <div className="text-3xl font-bold text-red-500">
@@ -41,4 +47,6 @@ export const SupplierPaymentCard: React.FC<SupplierPaymentCardProps> = ({
             </div>
         </MetricCard>
     );
-};
+});
+
+SupplierPaymentCard.displayName = 'SupplierPaymentCard';

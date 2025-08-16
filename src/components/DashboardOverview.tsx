@@ -1,13 +1,15 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useMemo, Suspense } from "react";
 import { MetricsGrid, MonthlySalesData } from "./MetricsGrid";
 import { SalesChart } from "./SalesChart";
-import { MonthlyBenefitsChart } from "./MonthlyBenefitsChart";
-import { FragranceStockChart } from "./FragranceStockChart";
-import { MonthlyHistoryTable } from "./MonthlyHistoryTable";
 import { MetricsErrorBoundary, ChartErrorBoundary } from "./DashboardErrorBoundary";
 import { DashboardOverviewSkeleton } from "./LoadingSkeleton";
+
+// Lazy load non-critical chart components
+const MonthlyBenefitsChart = React.lazy(() => import("./MonthlyBenefitsChart").then(module => ({ default: module.MonthlyBenefitsChart })));
+const FragranceStockChart = React.lazy(() => import("./FragranceStockChart").then(module => ({ default: module.FragranceStockChart })));
+const MonthlyHistoryTable = React.lazy(() => import("./MonthlyHistoryTable").then(module => ({ default: module.MonthlyHistoryTable })));
 
 export interface MonthlyData {
     quantity: number;
@@ -36,20 +38,20 @@ export interface DashboardOverviewProps {
     className?: string;
 }
 
-export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
+export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(function DashboardOverview({
     dashboardData,
     monthlyBenefits,
     isLoading = false,
     error = null,
     className = ""
-}) => {
-    // Loading state
-    if (isLoading) {
-        return <DashboardOverviewSkeleton className={className} />;
-    }
+}) {
+    const handleReload = useCallback(() => {
+        window.location.reload();
+    }, []);
 
-    // Error state
-    if (error) {
+    const errorContent = useMemo(() => {
+        if (!error) return null;
+
         return (
             <div className={`space-y-6 ${className}`}>
                 <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
@@ -65,7 +67,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         {error}
                     </p>
                     <button
-                        onClick={() => window.location.reload()}
+                        onClick={handleReload}
                         className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
                     >
                         Réessayer
@@ -73,6 +75,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
             </div>
         );
+    }, [error, className, handleReload]);
+
+    // Loading state
+    if (isLoading) {
+        return <DashboardOverviewSkeleton className={className} />;
+    }
+
+    // Error state
+    if (error) {
+        return errorContent;
     }
 
     return (
@@ -122,11 +134,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                                 </h3>
                             </div>
                             <div className="p-4">
-                                <MonthlyBenefitsChart
-                                    data={monthlyBenefits}
-                                    height={200}
-                                    currentMonthProfit={dashboardData.monthlySales.profit}
-                                />
+                                <Suspense fallback={
+                                    <div className="flex items-center justify-center h-[200px]">
+                                        <div className="animate-pulse bg-gray-200 rounded w-full h-full"></div>
+                                    </div>
+                                }>
+                                    <MonthlyBenefitsChart
+                                        data={monthlyBenefits}
+                                        height={200}
+                                        currentMonthProfit={dashboardData.monthlySales.profit}
+                                    />
+                                </Suspense>
                             </div>
                         </div>
                     </ChartErrorBoundary>
@@ -140,11 +158,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                                 </h3>
                             </div>
                             <div className="p-4">
-                                <FragranceStockChart
-                                    data={dashboardData.fragranceStock}
-                                    height={250}
-                                    totalStock={dashboardData.monthlySales.stock}
-                                />
+                                <Suspense fallback={
+                                    <div className="flex items-center justify-center h-[250px]">
+                                        <div className="animate-pulse bg-gray-200 rounded-full w-32 h-32"></div>
+                                    </div>
+                                }>
+                                    <FragranceStockChart
+                                        data={dashboardData.fragranceStock}
+                                        height={250}
+                                        totalStock={dashboardData.monthlySales.stock}
+                                    />
+                                </Suspense>
                             </div>
                         </div>
                     </ChartErrorBoundary>
@@ -152,13 +176,28 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     {/* Monthly History Table */}
                     <ChartErrorBoundary title="Historique Mensuel">
                         <div className="lg:col-span-1">
-                            <MonthlyHistoryTable
-                                monthlyBenefits={monthlyBenefits}
-                            />
+                            <Suspense fallback={
+                                <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
+                                    <div className="p-4 border-b">
+                                        <div className="animate-pulse bg-gray-200 rounded h-4 w-32"></div>
+                                    </div>
+                                    <div className="p-4 space-y-3">
+                                        {[...Array(4)].map((_, i) => (
+                                            <div key={i} className="animate-pulse bg-gray-200 rounded h-8 w-full"></div>
+                                        ))}
+                                    </div>
+                                </div>
+                            }>
+                                <MonthlyHistoryTable
+                                    monthlyBenefits={monthlyBenefits}
+                                />
+                            </Suspense>
                         </div>
                     </ChartErrorBoundary>
                 </div>
             </section>
         </div>
     );
-};
+});
+
+DashboardOverview.displayName = 'DashboardOverview';

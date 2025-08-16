@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { MetricCard } from "./MetricCard";
 import { TrendingUp } from "lucide-react";
 
@@ -7,14 +7,19 @@ export interface ProfitMetricCardProps {
     className?: string;
 }
 
-export const ProfitMetricCard: React.FC<ProfitMetricCardProps> = ({
+export const ProfitMetricCard: React.FC<ProfitMetricCardProps> = React.memo(function ProfitMetricCard({
     profit,
     className
-}) => {
+}) {
+    const formattedProfit = useMemo(() =>
+        profit.toLocaleString("fr-DZ"),
+        [profit]
+    );
+
     return (
         <MetricCard
             title="Bénéfice Estimé"
-            value={`${profit.toLocaleString("fr-DZ")} DZD`}
+            value={`${formattedProfit} DZD`}
             color="green"
             icon={TrendingUp}
             className={className}
@@ -29,4 +34,6 @@ export const ProfitMetricCard: React.FC<ProfitMetricCardProps> = ({
             </div>
         </MetricCard>
     );
-};
+});
+
+ProfitMetricCard.displayName = 'ProfitMetricCard';

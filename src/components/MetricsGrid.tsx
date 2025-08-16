@@ -20,11 +20,11 @@ export interface MetricsGridProps {
     className?: string;
 }
 
-export const MetricsGrid: React.FC<MetricsGridProps> = ({
+export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(function MetricsGrid({
     metrics,
     maxStock = 2700,
     className = ""
-}) => {
+}) {
     return (
         <div className={`grid grid-cols-2 gap-4 ${className}`}>
             <SalesMetricCard
@@ -52,4 +52,6 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({
             />
         </div>
     );
-};
+});
+
+MetricsGrid.displayName = 'MetricsGrid';

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
     Calendar,
     MapPin,
 } from "lucide-react";
+import { preloadComponent } from "@/utils/preloadUtils";
 
 interface MobileNavigationProps {
     isOpen: boolean;
@@ -109,6 +110,24 @@ export function MobileNavigation({
         };
     }, [isOpen, onClose]);
 
+    // Preload components on hover
+    const handleMouseEnter = useCallback((itemId: string) => {
+        switch (itemId) {
+            case "supermarkets":
+                preloadComponent(() => import("@/components/SupermarketsPage"));
+                break;
+            case "orders":
+                preloadComponent(() => import("@/components/OrdersPage"));
+                break;
+            case "add-sale":
+                preloadComponent(() => import("@/components/AddSalePage"));
+                break;
+            case "stock":
+                preloadComponent(() => import("@/components/StockPage"));
+                break;
+        }
+    }, []);
+
     const handleNavigation = (item: NavigationItem) => {
         if (item.action === "external" && item.path) {
             onClose();
@@ -161,6 +180,7 @@ export function MobileNavigation({
                                 className="w-full justify-start h-12 rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                                 onClick={() => handleNavigation(item)}
                                 onKeyDown={(e) => handleKeyDown(e, item)}
+                                onMouseEnter={() => handleMouseEnter(item.id)}
                                 role="menuitem"
                             >
                                 <Icon

@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useMemo } from "react";
 import {
     PieChart,
     Pie,
@@ -31,7 +32,7 @@ interface CustomTooltipProps {
     }>;
 }
 
-const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
+const CustomTooltip = React.memo(({ active, payload }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
         const data = payload[0];
         return (
@@ -46,9 +47,11 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
         );
     }
     return null;
-};
+});
 
-const CustomLabel = ({
+CustomTooltip.displayName = 'CustomTooltip';
+
+const CustomLabel = React.memo(({
     cx,
     cy,
     midAngle,
@@ -85,7 +88,9 @@ const CustomLabel = ({
             {`${(percent * 100).toFixed(0)}%`}
         </text>
     );
-};
+});
+
+CustomLabel.displayName = 'CustomLabel';
 
 interface LegendEntry {
     value: string;
@@ -96,7 +101,7 @@ interface LegendProps {
     payload?: LegendEntry[];
 }
 
-const CustomLegend = (props: LegendProps) => {
+const CustomLegend = React.memo((props: LegendProps) => {
     const { payload } = props;
     return (
         <div className="flex flex-wrap justify-center gap-2 mt-2">
@@ -111,16 +116,35 @@ const CustomLegend = (props: LegendProps) => {
             ))}
         </div>
     );
-};
+});
 
-export function FragranceStockChart({
+CustomLegend.displayName = 'CustomLegend';
+
+export const FragranceStockChart = React.memo(function FragranceStockChart({
     data,
     height = 300,
     className = "",
     totalStock = 0
 }: FragranceStockChartProps) {
     // Filter out entries with zero values for cleaner visualization
-    const filteredData = data.filter(item => item.value > 0);
+    const filteredData = useMemo(() =>
+        data.filter(item => item.value > 0),
+        [data]
+    );
+
+    const outerRadius = useMemo(() =>
+        Math.min(height * 0.35, 100),
+        [height]
+    );
+
+    const totalStockInCartons = useMemo(() =>
+        Math.floor(totalStock / 9),
+        [totalStock]
+    );
+
+    const legendWrapperStyle = useMemo(() => ({
+        paddingTop: '10px'
+    }), []);
 
     return (
         <div className={`w-full ${className}`}>
@@ -132,7 +156,7 @@ export function FragranceStockChart({
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            outerRadius={Math.min(height * 0.35, 100)}
+                            outerRadius={outerRadius}
                             fill="#8884d8"
                             dataKey="value"
                             nameKey="name"
@@ -151,7 +175,7 @@ export function FragranceStockChart({
                         <Tooltip content={<CustomTooltip />} />
                         <Legend
                             content={<CustomLegend />}
-                            wrapperStyle={{ paddingTop: '10px' }}
+                            wrapperStyle={legendWrapperStyle}
                         />
                     </PieChart>
                 </ResponsiveContainer>
@@ -161,7 +185,7 @@ export function FragranceStockChart({
             <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 rounded-b-xl">
                 Stock total:{" "}
                 <span className="font-medium text-purple-600">
-                    {Math.floor(totalStock / 9)} cartons
+                    {totalStockInCartons} cartons
                 </span>
                 {filteredData.length === 0 && (
                     <span className="ml-2 text-amber-600">
@@ -171,4 +195,4 @@ export function FragranceStockChart({
             </div>
         </div>
     );
-}
+});

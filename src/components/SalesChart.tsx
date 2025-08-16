@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useMemo, useCallback } from "react";
 import {
     BarChart,
     Bar,
@@ -25,7 +26,7 @@ interface CustomTooltipProps {
     label?: string;
 }
 
-const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
+const CustomTooltip = React.memo(({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
@@ -39,39 +40,73 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
         );
     }
     return null;
-};
+});
 
-export function SalesChart({ data, height = 200, className = "" }: SalesChartProps) {
+CustomTooltip.displayName = 'CustomTooltip';
+
+export const SalesChart = React.memo(function SalesChart({
+    data,
+    height = 200,
+    className = ""
+}: SalesChartProps) {
+    const chartMargin = useMemo(() => ({
+        top: 5,
+        right: 5,
+        left: 5,
+        bottom: 5
+    }), []);
+
+    const tickFormatter = useCallback((value: number) =>
+        `${(value / 1000).toFixed(0)}k`,
+        []
+    );
+
+    const xAxisTick = useMemo(() => ({
+        fontSize: 12,
+        fill: '#6B7280'
+    }), []);
+
+    const yAxisTick = useMemo(() => ({
+        fontSize: 12,
+        fill: '#6B7280'
+    }), []);
+
+    const tooltipCursor = useMemo(() => ({
+        fill: 'rgba(79, 70, 229, 0.1)'
+    }), []);
+
+    const barRadius = useMemo(() => [4, 4, 0, 0] as [number, number, number, number], []);
+
     return (
         <div className={`w-full ${className}`} style={{ height }}>
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                     data={data}
-                    margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+                    margin={chartMargin}
                     accessibilityLayer
                 >
                     <XAxis
                         dataKey="name"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 12, fill: '#6B7280' }}
+                        tick={xAxisTick}
                         aria-label="Jours de la semaine"
                     />
                     <YAxis
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 12, fill: '#6B7280' }}
-                        tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                        tick={yAxisTick}
+                        tickFormatter={tickFormatter}
                         aria-label="Montant des ventes en DZD"
                     />
                     <Tooltip
                         content={<CustomTooltip />}
-                        cursor={{ fill: 'rgba(79, 70, 229, 0.1)' }}
+                        cursor={tooltipCursor}
                     />
                     <Bar
                         dataKey="value"
                         fill="#4f46e5"
-                        radius={[4, 4, 0, 0]}
+                        radius={barRadius}
                         name="Ventes"
                         aria-label="Ventes quotidiennes"
                     />
@@ -79,4 +114,4 @@ export function SalesChart({ data, height = 200, className = "" }: SalesChartPro
             </ResponsiveContainer>
         </div>
     );
-}
+});

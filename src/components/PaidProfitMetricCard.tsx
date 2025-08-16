@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { MetricCard } from "./MetricCard";
 import { DollarSign } from "lucide-react";
 
@@ -8,19 +8,25 @@ export interface PaidProfitMetricCardProps {
     className?: string;
 }
 
-export const PaidProfitMetricCard: React.FC<PaidProfitMetricCardProps> = ({
+export const PaidProfitMetricCard: React.FC<PaidProfitMetricCardProps> = React.memo(function PaidProfitMetricCard({
     paidProfit,
     totalProfit,
     className
-}) => {
-    const percentage = totalProfit > 0
-        ? Math.round((paidProfit / totalProfit) * 100)
-        : 0;
+}) {
+    const percentage = useMemo(() =>
+        totalProfit > 0 ? Math.round((paidProfit / totalProfit) * 100) : 0,
+        [paidProfit, totalProfit]
+    );
+
+    const formattedPaidProfit = useMemo(() =>
+        paidProfit.toLocaleString("fr-DZ"),
+        [paidProfit]
+    );
 
     return (
         <MetricCard
             title="Bénéfice Réel (Payé)"
-            value={`${paidProfit.toLocaleString("fr-DZ")} DZD`}
+            value={`${formattedPaidProfit} DZD`}
             color="amber"
             icon={DollarSign}
             percentage={percentage}
@@ -36,4 +42,6 @@ export const PaidProfitMetricCard: React.FC<PaidProfitMetricCardProps> = ({
             </div>
         </MetricCard>
     );
-};
+});
+
+PaidProfitMetricCard.displayName = 'PaidProfitMetricCard';

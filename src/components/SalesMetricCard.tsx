@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { MetricCard } from "./MetricCard";
 import { ShoppingCart } from "lucide-react";
 
@@ -8,22 +8,29 @@ export interface SalesMetricCardProps {
     className?: string;
 }
 
-export const SalesMetricCard: React.FC<SalesMetricCardProps> = ({
+export const SalesMetricCard: React.FC<SalesMetricCardProps> = React.memo(function SalesMetricCard({
     quantity,
     revenue,
     className
-}) => {
-    const cartons = Math.floor(quantity / 9);
+}) {
+    const cartons = useMemo(() => Math.floor(quantity / 9), [quantity]);
+
+    const formattedRevenue = useMemo(() =>
+        revenue.toLocaleString("fr-DZ"),
+        [revenue]
+    );
 
     return (
         <MetricCard
             title="Ventes Totales"
             value={`${quantity} pièces`}
             subtitle={`${cartons} cartons`}
-            additionalInfo={`${revenue.toLocaleString("fr-DZ")} DZD`}
+            additionalInfo={`${formattedRevenue} DZD`}
             color="blue"
             icon={ShoppingCart}
             className={className}
         />
     );
-};
+});
+
+SalesMetricCard.displayName = 'SalesMetricCard';

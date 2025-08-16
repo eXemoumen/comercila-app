@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { MetricCard } from "./MetricCard";
 import { Package } from "lucide-react";
 
@@ -8,13 +8,13 @@ export interface StockMetricCardProps {
     className?: string;
 }
 
-export const StockMetricCard: React.FC<StockMetricCardProps> = ({
+export const StockMetricCard: React.FC<StockMetricCardProps> = React.memo(function StockMetricCard({
     stock,
     maxStock = 2700,
     className
-}) => {
-    const cartons = Math.floor(stock / 9);
-    const percentage = Math.round((stock / maxStock) * 100);
+}) {
+    const cartons = useMemo(() => Math.floor(stock / 9), [stock]);
+    const percentage = useMemo(() => Math.round((stock / maxStock) * 100), [stock, maxStock]);
 
     return (
         <MetricCard
@@ -25,7 +25,6 @@ export const StockMetricCard: React.FC<StockMetricCardProps> = ({
             icon={Package}
             percentage={percentage}
             showProgressBar={true}
-
             className={`col-span-2 ${className}`}
         >
             <div className="flex justify-between items-center">
@@ -43,4 +42,6 @@ export const StockMetricCard: React.FC<StockMetricCardProps> = ({
             </div>
         </MetricCard>
     );
-};
+});
+
+StockMetricCard.displayName = 'StockMetricCard';
