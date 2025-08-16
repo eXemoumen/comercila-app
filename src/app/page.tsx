@@ -26,6 +26,25 @@ const AddSalePage = React.lazy(() => import("@/components/AddSalePage").then(mod
 const StockPage = React.lazy(() => import("@/components/StockPage").then(module => ({ default: module.StockPage })));
 const MigrationModal = React.lazy(() => import("@/components/MigrationModal").then(module => ({ default: module.MigrationModal })));
 
+/**
+ * Main Dashboard Component
+ * 
+ * This is the primary dashboard component for the Comercila application.
+ * It orchestrates the entire dashboard experience including:
+ * - Navigation between different pages (dashboard, supermarkets, orders, etc.)
+ * - Data management and refresh functionality
+ * - Error handling and loading states
+ * - Migration modal handling
+ * - Lazy loading of page components for performance
+ * 
+ * The component has been refactored to be under 200 lines by extracting:
+ * - Custom hooks for state management
+ * - Individual page components
+ * - Layout and navigation components
+ * - Error boundaries and loading components
+ * 
+ * @returns {JSX.Element} The main dashboard interface
+ */
 export default function Dashboard() {
   // Custom hooks for state management
   const { dashboardData, monthlyBenefits, isLoading, error, refreshData } = useDashboardData();

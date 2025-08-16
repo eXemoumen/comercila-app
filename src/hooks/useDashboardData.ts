@@ -34,6 +34,22 @@ interface UseDashboardDataReturn {
     refreshData: () => Promise<void>;
 }
 
+/**
+ * Custom hook for managing dashboard data
+ * 
+ * This hook handles all dashboard data fetching, calculations, and state management.
+ * It provides:
+ * - Monthly sales data with profit calculations
+ * - Sales trend data for charts
+ * - Fragrance stock data for visualization
+ * - Loading and error states
+ * - Data refresh functionality
+ * 
+ * The hook automatically fetches data on mount and provides a refresh function
+ * for manual data updates.
+ * 
+ * @returns {UseDashboardDataReturn} Object containing dashboard data and state
+ */
 export function useDashboardData(): UseDashboardDataReturn {
     const [dashboardData, setDashboardData] = useState<DashboardData>({
         monthlySales: {
