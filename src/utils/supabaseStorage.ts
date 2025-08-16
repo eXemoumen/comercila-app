@@ -635,3 +635,68 @@ export const addSupabasePayment = async (saleId: string, payment: Omit<Payment, 
 
     return null;
 };
+
+export const syncFragranceStockWithHistory = async (): Promise<void> => {
+    console.log('🔄 Syncing fragrance stock with stock history...');
+    
+    // Get all stock history records ordered by date
+    const { data: history, error: historyError } = await supabase
+        .from('stock_history')
+        .select('*')
+        .order('date', { ascending: true });
+        
+    if (historyError) {
+        console.error('❌ Error fetching stock history:', historyError);
+        return;
+    }
+    
+    console.log(`📊 Processing ${history.length} stock history records...`);
+    
+    // Initialize fragrance stock tracking
+    const fragranceStock: Record<string, number> = {};
+    
+    // Process each history record
+    history.forEach((record, index) => {
+        if (record.fragrance_distribution) {
+            console.log(`📝 Processing record ${index + 1}: ${record.type} ${record.quantity} cartons`);
+            
+            // Update fragrance stock based on the distribution
+            Object.entries(record.fragrance_distribution).forEach(([fragranceId, quantity]) => {
+                if (!fragranceStock[fragranceId]) {
+                    fragranceStock[fragranceId] = 0;
+                }
+                
+                // Add or subtract based on the type
+                if (record.type === 'added') {
+                    fragranceStock[fragranceId] += quantity;
+                } else if (record.type === 'removed') {
+                    fragranceStock[fragranceId] -= quantity;
+                } else if (record.type === 'adjusted') {
+                    // For adjustments, we directly add the quantity (could be negative)
+                    fragranceStock[fragranceId] += quantity;
+                }
+            });
+        }
+    });
+    
+    console.log('📦 Final calculated fragrance stock:', fragranceStock);
+    
+    // Update the fragrance_stock table
+    for (const [fragranceId, quantity] of Object.entries(fragranceStock)) {
+        const { error } = await supabase
+            .from('fragrance_stock')
+            .update({ 
+                quantity: Math.max(0, quantity), // Ensure non-negative
+                updated_at: new Date().toISOString()
+            })
+            .eq('fragrance_id', fragranceId);
+            
+        if (error) {
+            console.error(`❌ Error updating fragrance ${fragranceId}:`, error);
+        } else {
+            console.log(`✅ Updated fragrance ${fragranceId} to ${Math.max(0, quantity)} cartons`);
+        }
+    }
+    
+    console.log('✅ Fragrance stock sync completed!');
+};

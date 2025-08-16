@@ -34,7 +34,8 @@ import {
     getSupabaseFragranceStock,
     updateSupabaseFragranceStock,
     setSupabaseFragranceStock,
-    getSupabaseCurrentStock
+    getSupabaseCurrentStock,
+    syncFragranceStockWithHistory
 } from './supabaseStorage';
 
 import { getMigrationStatus } from './migration';
@@ -421,4 +422,15 @@ export const refreshStorageConfig = () => {
 export const getStorageConfig = () => {
     updateStorageConfig();
     return { ...USE_SUPABASE };
+};
+
+// Add sync function to hybrid storage
+export const syncFragranceStock = async (): Promise<void> => {
+    await initializeStorage();
+    
+    if (USE_SUPABASE.fragranceStock) {
+        return await syncFragranceStockWithHistory();
+    } else {
+        console.log('💾 Local storage sync not implemented');
+    }
 };
