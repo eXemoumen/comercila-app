@@ -38,6 +38,7 @@ import {
 } from './supabaseStorage';
 
 import { getMigrationStatus } from './migration';
+import { supabase } from '@/lib/supabase';
 import type { Sale, Order, Stock, Payment, Supermarket, FragranceStock } from './storage';
 
 // Configuration for which data sources to use
@@ -105,9 +106,72 @@ const runMigrationIfNeeded = async () => {
             console.log('✅ Migration result:', result);
         } else {
             console.log('📦 No local data to migrate');
+            // Initialize with default data if Supabase is empty
+            await initializeSupabaseWithDefaultData();
         }
     } catch (error) {
         console.error('❌ Migration error:', error);
+    }
+};
+
+// Initialize Supabase with default data if tables are empty
+const initializeSupabaseWithDefaultData = async () => {
+    try {
+        console.log('🔄 Initializing Supabase with default data...');
+        
+        // Check if fragrance_stock table is empty
+        const { data: fragranceData } = await supabase
+            .from('fragrance_stock')
+            .select('*')
+            .limit(1);
+            
+        if (!fragranceData || fragranceData.length === 0) {
+            console.log('📦 Adding default fragrance stock...');
+            const { updateSupabaseFragranceStock } = await import('./supabaseStorage');
+            
+            // Add default fragrances
+            const defaultFragrances = [
+                { id: '1', name: 'Lavande', color: '#9F7AEA', quantity: 10 },
+                { id: '2', name: 'Rose', color: '#F687B3', quantity: 15 },
+                { id: '3', name: 'Citron', color: '#FBBF24', quantity: 12 },
+                { id: '4', name: 'Fraîcheur Marine', color: '#60A5FA', quantity: 8 },
+                { id: '5', name: 'Vanille', color: '#F59E0B', quantity: 20 },
+                { id: '6', name: 'Grenade', color: '#F97316', quantity: 5 },
+                { id: '7', name: 'Jasmin', color: '#10B981', quantity: 18 },
+                { id: '8', name: 'Amande', color: '#8B5CF6', quantity: 14 }
+            ];
+            
+            for (const fragrance of defaultFragrances) {
+                await updateSupabaseFragranceStock(fragrance.id, fragrance.quantity);
+            }
+            console.log('✅ Default fragrance stock added');
+        }
+        
+        // Check if stock_history table is empty
+        const { data: stockData } = await supabase
+            .from('stock_history')
+            .select('*')
+            .limit(1);
+            
+        if (!stockData || stockData.length === 0) {
+            console.log('📦 Adding initial stock history...');
+            const { addSupabaseStockEntry } = await import('./supabaseStorage');
+            
+            // Add initial stock entry
+            const totalFragranceStock = 102; // Sum of all default fragrances
+            await addSupabaseStockEntry(
+                totalFragranceStock,
+                'added',
+                'Initial stock setup',
+                totalFragranceStock,
+                undefined
+            );
+            console.log('✅ Initial stock history added');
+        }
+        
+        console.log('✅ Supabase initialization complete');
+    } catch (error) {
+        console.error('❌ Error initializing Supabase:', error);
     }
 };
 
@@ -121,11 +185,17 @@ const checkLocalDataExists = () => {
 };
 
 // Initialize storage config
-updateStorageConfig();
+let isInitialized = false;
+
+const initializeStorage = async () => {
+    if (isInitialized) return;
+    await updateStorageConfig();
+    isInitialized = true;
+};
 
 // Hybrid Sales Functions
 export const getSales = async (): Promise<Sale[]> => {
-    updateStorageConfig();
+    await initializeStorage();
     console.log('🛒 Getting sales data...');
 
     if (USE_SUPABASE.sales) {
@@ -140,7 +210,7 @@ export const getSales = async (): Promise<Sale[]> => {
 };
 
 export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> => {
-    updateStorageConfig();
+    await initializeStorage();
     console.log('➕ Adding sale data...');
 
     if (USE_SUPABASE.sales) {
@@ -153,7 +223,7 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
 };
 
 export const deleteSale = async (saleId: string): Promise<boolean> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.sales) {
         return await deleteSupabaseSale(saleId);
@@ -163,7 +233,7 @@ export const deleteSale = async (saleId: string): Promise<boolean> => {
 };
 
 export const updateSalePayment = async (saleId: string, isPaid: boolean): Promise<Sale | null> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.sales) {
         return await updateSupabaseSalePayment(saleId, isPaid);
@@ -173,7 +243,7 @@ export const updateSalePayment = async (saleId: string, isPaid: boolean): Promis
 };
 
 export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): Promise<Sale | null> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.sales) {
         return await addSupabasePayment(saleId, payment);
@@ -184,7 +254,7 @@ export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): 
 
 // Hybrid Orders Functions
 export const getOrders = async (): Promise<Order[]> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.orders) {
         return await getSupabaseOrders();
@@ -194,7 +264,7 @@ export const getOrders = async (): Promise<Order[]> => {
 };
 
 export const addOrder = async (order: Omit<Order, 'id' | 'status'>): Promise<Order | null> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.orders) {
         return await addSupabaseOrder(order);
@@ -204,7 +274,7 @@ export const addOrder = async (order: Omit<Order, 'id' | 'status'>): Promise<Ord
 };
 
 export const deleteOrder = async (id: string): Promise<void> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.orders) {
         await deleteSupabaseOrder(id);
@@ -214,7 +284,7 @@ export const deleteOrder = async (id: string): Promise<void> => {
 };
 
 export const completeOrder = async (orderId: string): Promise<Order | null> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.orders) {
         return await completeSupabaseOrder(orderId);
@@ -225,7 +295,7 @@ export const completeOrder = async (orderId: string): Promise<Order | null> => {
 
 // Hybrid Stock Functions
 export const getStockHistory = async (): Promise<Stock[]> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.stock) {
         return await getSupabaseStockHistory();
@@ -240,7 +310,7 @@ export const updateStock = async (
     reason: string,
     fragranceDistribution?: Record<string, number>
 ): Promise<number> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.stock) {
         // For Supabase, we need to calculate current stock first
@@ -267,7 +337,7 @@ export const updateStock = async (
 
 // Hybrid Fragrance Stock Functions
 export const getFragranceStock = async (): Promise<FragranceStock[]> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.fragranceStock) {
         return await getSupabaseFragranceStock();
@@ -277,7 +347,7 @@ export const getFragranceStock = async (): Promise<FragranceStock[]> => {
 };
 
 export const updateFragranceStock = async (fragranceId: string, quantity: number): Promise<FragranceStock | null> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.fragranceStock) {
         return await updateSupabaseFragranceStock(fragranceId, quantity);
@@ -287,7 +357,7 @@ export const updateFragranceStock = async (fragranceId: string, quantity: number
 };
 
 export const setFragranceStock = async (fragranceId: string, newQuantity: number): Promise<FragranceStock | null> => {
-    updateStorageConfig();
+    await initializeStorage();
 
     if (USE_SUPABASE.fragranceStock) {
         return await setSupabaseFragranceStock(fragranceId, newQuantity);
@@ -315,7 +385,7 @@ export const deleteSupermarket = async (id: string): Promise<boolean> => {
 
 // Helper function to get current stock
 export const getCurrentStock = async (): Promise<{ currentStock: number; fragranceStock: number }> => {
-    updateStorageConfig();
+    await initializeStorage();
     console.log('📦 Getting current stock data...');
 
     if (USE_SUPABASE.stock) {

@@ -11,6 +11,7 @@ import type {
 
 // Sales CRUD
 export const getSupabaseSales = async (): Promise<Sale[]> => {
+    console.log('🔍 Fetching sales from Supabase...');
     const { data, error } = await supabase
         .from("sales")
         .select(`
@@ -20,11 +21,14 @@ export const getSupabaseSales = async (): Promise<Sale[]> => {
         .order('date', { ascending: false });
 
     if (error) {
-        console.error("Error fetching sales:", error);
+        console.error("❌ Error fetching sales:", error);
         return [];
     }
 
-    return data?.map(s => ({
+    console.log('📊 Raw Supabase sales data:', data);
+    console.log('📊 Number of sales records:', data?.length || 0);
+
+    const sales = data?.map(s => ({
         id: s.id,
         date: s.date,
         supermarketId: s.supermarket_id,
@@ -47,6 +51,9 @@ export const getSupabaseSales = async (): Promise<Sale[]> => {
         note: s.note,
         fragranceDistribution: s.fragrance_distribution
     })) || [];
+
+    console.log('🔄 Processed sales data:', sales);
+    return sales;
 };
 
 export const addSupabaseSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> => {
@@ -326,25 +333,34 @@ export const addSupabaseStockEntry = async (
 
 // Fragrance Stock CRUD
 export const getSupabaseFragranceStock = async (): Promise<FragranceStock[]> => {
+    console.log('🔍 Fetching fragrance stock from Supabase...');
     const { data, error } = await supabase
         .from("fragrance_stock")
         .select("*")
         .order('name');
 
     if (error) {
-        console.error("Error fetching fragrance stock:", error);
+        console.error("❌ Error fetching fragrance stock:", error);
         return [];
     }
 
-    return data?.map(f => ({
+    console.log('📊 Raw fragrance stock data:', data);
+    console.log('📊 Number of fragrance records:', data?.length || 0);
+
+    const fragranceStock = data?.map(f => ({
         fragranceId: f.fragrance_id,
         name: f.name,
         quantity: f.quantity,
         color: f.color
     })) || [];
+
+    console.log('🔄 Processed fragrance stock:', fragranceStock);
+    return fragranceStock;
 };
 
 export const getSupabaseCurrentStock = async (): Promise<{ current_stock: number, fragrance_stock: number }> => {
+    console.log('🔍 Fetching current stock from Supabase...');
+    
     const { data, error } = await supabase
         .from('stock_history')
         .select('current_stock')
@@ -353,27 +369,42 @@ export const getSupabaseCurrentStock = async (): Promise<{ current_stock: number
         .single();
 
     if (error) {
-        console.error('Error fetching current stock:', error);
+        console.error('❌ Error fetching current stock:', error);
         return { current_stock: 0, fragrance_stock: 0 };
     }
 
+    console.log('📊 Stock history data:', data);
+
     if (!data) {
+        console.log('⚠️ No stock history data found');
         return { current_stock: 0, fragrance_stock: 0 };
     }
 
     // Get actual fragrance stock from fragrance_stock table
+    console.log('🔍 Fetching fragrance stock from Supabase...');
     const { data: fragranceData, error: fragranceError } = await supabase
         .from('fragrance_stock')
-        .select('quantity');
+        .select('quantity, name');
 
     if (fragranceError) {
-        console.error('Error fetching fragrance stock:', fragranceError);
+        console.error('❌ Error fetching fragrance stock:', fragranceError);
         return { current_stock: data.current_stock, fragrance_stock: 0 };
     }
 
-    const fragranceStock = fragranceData?.reduce((acc, item) => acc + item.quantity, 0) || 0;
+    console.log('📊 Raw fragrance stock data:', fragranceData);
+    console.log('📊 Number of fragrance records:', fragranceData?.length || 0);
 
-    return { current_stock: data.current_stock, fragrance_stock: fragranceStock };
+    const fragranceStock = fragranceData?.reduce((acc, item) => {
+        console.log(`📦 Fragrance: ${item.name}, Quantity: ${item.quantity}`);
+        return acc + item.quantity;
+    }, 0) || 0;
+
+    console.log('📊 Total fragrance stock calculated:', fragranceStock);
+
+    const result = { current_stock: data.current_stock, fragrance_stock: fragranceStock };
+    console.log('📊 Final stock result:', result);
+    
+    return result;
 };
 
 
