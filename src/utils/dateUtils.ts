@@ -143,7 +143,7 @@ export function filterByMonth<T extends Record<string, unknown>>(
     dateProperty: string = "date"
 ): T[] {
     return items.filter((item) => {
-        const itemDate = new Date(item[dateProperty]);
+        const itemDate = new Date(item[dateProperty] as string);
         return isInMonth(itemDate, month, year);
     });
 }

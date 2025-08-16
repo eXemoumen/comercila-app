@@ -6,6 +6,8 @@ import { SalesChart } from "./SalesChart";
 import { MonthlyBenefitsChart } from "./MonthlyBenefitsChart";
 import { FragranceStockChart } from "./FragranceStockChart";
 import { MonthlyHistoryTable } from "./MonthlyHistoryTable";
+import { MetricsErrorBoundary, ChartErrorBoundary } from "./DashboardErrorBoundary";
+import { DashboardOverviewSkeleton } from "./LoadingSkeleton";
 
 export interface MonthlyData {
     quantity: number;
@@ -43,23 +45,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 }) => {
     // Loading state
     if (isLoading) {
-        return (
-            <div className={`space-y-6 ${className}`}>
-                <div className="animate-pulse">
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                        {[...Array(5)].map((_, i) => (
-                            <div key={i} className="bg-gray-200 rounded-xl h-24"></div>
-                        ))}
-                    </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-gray-200 rounded-xl h-64"></div>
-                        <div className="bg-gray-200 rounded-xl h-64"></div>
-                        <div className="bg-gray-200 rounded-xl h-64"></div>
-                        <div className="bg-gray-200 rounded-xl h-64"></div>
-                    </div>
-                </div>
-            </div>
-        );
+        return <DashboardOverviewSkeleton className={className} />;
     }
 
     // Error state
@@ -96,10 +82,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <h2 id="metrics-heading" className="sr-only">
                     Métriques du tableau de bord
                 </h2>
-                <MetricsGrid
-                    metrics={dashboardData.monthlySales}
-                    className="mb-6"
-                />
+                <MetricsErrorBoundary>
+                    <MetricsGrid
+                        metrics={dashboardData.monthlySales}
+                        className="mb-6"
+                    />
+                </MetricsErrorBoundary>
             </section>
 
             {/* Charts and Analytics Section */}
@@ -109,58 +97,66 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Sales Trend Chart */}
-                    <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                        <div className="p-4 border-b">
-                            <h3 className="text-sm font-medium text-gray-700">
-                                Tendance des Ventes (7 derniers jours)
-                            </h3>
+                    <ChartErrorBoundary title="Tendance des Ventes">
+                        <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
+                            <div className="p-4 border-b">
+                                <h3 className="text-sm font-medium text-gray-700">
+                                    Tendance des Ventes (7 derniers jours)
+                                </h3>
+                            </div>
+                            <div className="p-4">
+                                <SalesChart
+                                    data={dashboardData.salesData}
+                                    height={200}
+                                />
+                            </div>
                         </div>
-                        <div className="p-4">
-                            <SalesChart
-                                data={dashboardData.salesData}
-                                height={200}
-                            />
-                        </div>
-                    </div>
+                    </ChartErrorBoundary>
 
                     {/* Monthly Benefits Chart */}
-                    <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                        <div className="p-4 border-b">
-                            <h3 className="text-sm font-medium text-gray-700">
-                                Bénéfices Mensuels (6 derniers mois)
-                            </h3>
+                    <ChartErrorBoundary title="Bénéfices Mensuels">
+                        <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
+                            <div className="p-4 border-b">
+                                <h3 className="text-sm font-medium text-gray-700">
+                                    Bénéfices Mensuels (6 derniers mois)
+                                </h3>
+                            </div>
+                            <div className="p-4">
+                                <MonthlyBenefitsChart
+                                    data={monthlyBenefits}
+                                    height={200}
+                                    currentMonthProfit={dashboardData.monthlySales.profit}
+                                />
+                            </div>
                         </div>
-                        <div className="p-4">
-                            <MonthlyBenefitsChart
-                                data={monthlyBenefits}
-                                height={200}
-                                currentMonthProfit={dashboardData.monthlySales.profit}
-                            />
-                        </div>
-                    </div>
+                    </ChartErrorBoundary>
 
                     {/* Fragrance Stock Distribution */}
-                    <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                        <div className="p-4 border-b">
-                            <h3 className="text-sm font-medium text-gray-700">
-                                Distribution du Stock par Parfum
-                            </h3>
+                    <ChartErrorBoundary title="Distribution du Stock">
+                        <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
+                            <div className="p-4 border-b">
+                                <h3 className="text-sm font-medium text-gray-700">
+                                    Distribution du Stock par Parfum
+                                </h3>
+                            </div>
+                            <div className="p-4">
+                                <FragranceStockChart
+                                    data={dashboardData.fragranceStock}
+                                    height={250}
+                                    totalStock={dashboardData.monthlySales.stock}
+                                />
+                            </div>
                         </div>
-                        <div className="p-4">
-                            <FragranceStockChart
-                                data={dashboardData.fragranceStock}
-                                height={250}
-                                totalStock={dashboardData.monthlySales.stock}
-                            />
-                        </div>
-                    </div>
+                    </ChartErrorBoundary>
 
                     {/* Monthly History Table */}
-                    <div className="lg:col-span-1">
-                        <MonthlyHistoryTable
-                            monthlyBenefits={monthlyBenefits}
-                        />
-                    </div>
+                    <ChartErrorBoundary title="Historique Mensuel">
+                        <div className="lg:col-span-1">
+                            <MonthlyHistoryTable
+                                monthlyBenefits={monthlyBenefits}
+                            />
+                        </div>
+                    </ChartErrorBoundary>
                 </div>
             </section>
         </div>

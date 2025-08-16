@@ -76,12 +76,7 @@ export interface Payment {
 }
 
 // Storage Keys
-const SALES_KEY = 'soap_sales';
 const SUPERMARKETS_KEY = 'soap_supermarkets';
-const STOCK_KEY = 'soap_stock';
-const ORDERS_KEY = 'soap_orders';
-const FRAGRANCES_KEY = 'soap_fragrances';
-const FRAGRANCE_STOCK_KEY = 'soap_fragrance_stock';
 
 // Default fragrances
 const DEFAULT_FRAGRANCES = [
@@ -282,9 +277,9 @@ export const getSupermarkets = async (): Promise<Supermarket[]> => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const updateSupermarketStats = (id: string, _quantity: number, _totalValue: number) => {
+export const updateSupermarketStats = async (id: string, _quantity: number, _totalValue: number) => {
   if (typeof window === 'undefined') return;
-  const supermarkets = getSupermarkets();
+  const supermarkets = await getSupermarkets();
   const index = supermarkets.findIndex(s => s.id === id);
   if (index !== -1) {
     // Note: totalSales and totalValue are no longer part of the Supermarket interface

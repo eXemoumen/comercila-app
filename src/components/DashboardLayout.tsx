@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { NavigationTabs } from "@/components/NavigationTabs";
 import { MobileNavigation } from "@/components/MobileNavigation";
 
@@ -24,11 +24,11 @@ export function DashboardLayout({
         onToggleMobileMenu();
     };
 
-    const handleMobileMenuClose = () => {
+    const handleMobileMenuClose = useCallback(() => {
         if (showMobileMenu) {
             onToggleMobileMenu();
         }
-    };
+    }, [showMobileMenu, onToggleMobileMenu]);
 
     const handleTabChange = (tab: string) => {
         onTabChange(tab);
@@ -53,7 +53,7 @@ export function DashboardLayout({
         return () => {
             document.removeEventListener("keydown", handleKeyDown);
         };
-    }, [showMobileMenu]);
+    }, [showMobileMenu, handleMobileMenuClose]);
 
     return (
         <main className="container max-w-md mx-auto p-4 bg-gradient-to-b from-gray-50 to-white min-h-screen">

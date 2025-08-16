@@ -87,11 +87,20 @@ const CustomLabel = ({
     );
 };
 
-const CustomLegend = (props: any) => {
+interface LegendEntry {
+    value: string;
+    color: string;
+}
+
+interface LegendProps {
+    payload?: LegendEntry[];
+}
+
+const CustomLegend = (props: LegendProps) => {
     const { payload } = props;
     return (
         <div className="flex flex-wrap justify-center gap-2 mt-2">
-            {payload.map((entry: any, index: number) => (
+            {payload?.map((entry: LegendEntry, index: number) => (
                 <div key={index} className="flex items-center gap-1">
                     <div
                         className="w-3 h-3 rounded-full"

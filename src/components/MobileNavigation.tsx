@@ -162,7 +162,6 @@ export function MobileNavigation({
                                 onClick={() => handleNavigation(item)}
                                 onKeyDown={(e) => handleKeyDown(e, item)}
                                 role="menuitem"
-                                aria-pressed={isActive}
                             >
                                 <Icon
                                     className={`h-5 w-5 mr-2 transition-colors duration-200 ${isActive ? "text-white" : "text-gray-500"

@@ -9,7 +9,7 @@ export async function getSupermarketOrders(
 ): Promise<Order[]> {
   try {
     // Get all orders and filter by supermarketId
-    const allOrders = getOrders();
+    const allOrders = await getOrders();
     return allOrders.filter(order => order.supermarketId === supermarketId);
   } catch (error) {
     console.error("Error fetching supermarket orders:", error);

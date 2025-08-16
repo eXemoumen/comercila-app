@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, ChevronLeft, Plus, X } from "lucide-react";
 import type { Sale, Payment } from "@/types/index";
-import { getSupermarkets, addPayment } from "@/utils/storage";
+import { addPayment } from "@/utils/storage";
 
 export default function PendingPaymentsPage() {
   const router = useRouter();
   const [pendingSales, setPendingSales] = useState<Sale[]>([]);
+  const [supermarkets, setSupermarkets] = useState<{ id: string; name: string }[]>([]);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState("");
@@ -18,6 +19,8 @@ export default function PendingPaymentsPage() {
 
   useEffect(() => {
     const salesData = localStorage.getItem("soap_sales");
+    const supermarketsData = localStorage.getItem("soap_supermarkets");
+
     if (salesData) {
       try {
         const allSales = JSON.parse(salesData) as Sale[];
@@ -26,6 +29,16 @@ export default function PendingPaymentsPage() {
       } catch (error) {
         console.error("Error loading sales:", error);
         setPendingSales([]);
+      }
+    }
+
+    if (supermarketsData) {
+      try {
+        const allSupermarkets = JSON.parse(supermarketsData);
+        setSupermarkets(allSupermarkets);
+      } catch (error) {
+        console.error("Error loading supermarkets:", error);
+        setSupermarkets([]);
       }
     }
   }, []);
@@ -110,7 +123,7 @@ export default function PendingPaymentsPage() {
           pendingSales.map((sale) => {
             const remainingAmount = sale.remainingAmount || 0;
             const totalValue = sale.totalValue || 0;
-            const supermarket = getSupermarkets().find(
+            const supermarket = supermarkets.find(
               (sm) => sm.id === sale.supermarketId
             );
 
