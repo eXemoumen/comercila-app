@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable experimental features for better performance
+  // Enable static export for Capacitor
+  output: 'export',
+  trailingSlash: true,
+  images: {
+    unoptimized: true,
+  },
+  
+  // Ensure CSS is properly handled in static export
   experimental: {
     optimizePackageImports: ['recharts', 'lucide-react'],
   },
@@ -52,12 +59,6 @@ const nextConfig = {
   // Enable compression and optimization
   compress: true,
   poweredByHeader: false,
-
-  // Optimize images
-  images: {
-    formats: ['image/webp', 'image/avif'],
-    minimumCacheTTL: 60,
-  },
 };
 
 module.exports = nextConfig;
