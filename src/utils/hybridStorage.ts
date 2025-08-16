@@ -33,7 +33,8 @@ import {
     addSupabaseStockEntry,
     getSupabaseFragranceStock,
     updateSupabaseFragranceStock,
-    setSupabaseFragranceStock
+    setSupabaseFragranceStock,
+    getSupabaseCurrentStock
 } from './supabaseStorage';
 
 import { getMigrationStatus } from './migration';
@@ -178,9 +179,10 @@ export const updateStock = async (
 
     if (USE_SUPABASE.stock) {
         // For Supabase, we need to calculate current stock first
-        const currentStock = await getCurrentStock();
-        const newStock = type === 'removed' ? currentStock - quantity :
-            type === 'added' ? currentStock + quantity : quantity;
+        const { currentStock } = await getCurrentStock();
+        const safeCurrentStock = currentStock || 0;
+        const newStock = type === 'removed' ? safeCurrentStock - quantity :
+            type === 'added' ? safeCurrentStock + quantity : quantity;
 
         await addSupabaseStockEntry(quantity, type, reason, newStock, fragranceDistribution);
 
