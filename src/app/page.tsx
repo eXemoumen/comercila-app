@@ -7,6 +7,7 @@ import { StockPage } from "@/components/StockPage";
 import { AddSalePage } from "@/components/AddSalePage";
 import { SupermarketsPage } from "@/components/SupermarketsPage";
 import { OrdersPage } from "@/components/OrdersPage";
+import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -17,6 +18,8 @@ export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [selectedSupermarketId, setSelectedSupermarketId] =
+    useState<string>("");
 
   useEffect(() => {
     // Add a simple test to see if the app loads
@@ -36,18 +39,22 @@ export default function HomePage() {
 
   // Callback functions for navigation
   const handleBack = () => {
-    setActiveTab("dashboard");
+    if (activeTab === "supermarket-profile") {
+      setActiveTab("supermarkets");
+      setSelectedSupermarketId("");
+    } else {
+      setActiveTab("dashboard");
+    }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleViewSupermarket = (id: string) => {
-    // For now, just go back to dashboard
-    // In a full app, you'd navigate to a supermarket detail page
-    setActiveTab("dashboard");
+    // Navigate to supermarket profile
+    setSelectedSupermarketId(id);
+    setActiveTab("supermarket-profile");
   };
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleCompleteOrder = (order: unknown) => {
+  const handleCompleteOrder = (_order: unknown) => {
     // Handle order completion
     // For now, just go back to dashboard
     setActiveTab("dashboard");
@@ -118,6 +125,15 @@ export default function HomePage() {
           <OrdersPage
             onBack={handleBack}
             onCompleteOrder={handleCompleteOrder}
+          />
+        );
+
+      case "supermarket-profile":
+        return (
+          <SupermarketProfilePage
+            onBack={handleBack}
+            supermarketId={selectedSupermarketId}
+            setActiveTab={setActiveTab}
           />
         );
 
