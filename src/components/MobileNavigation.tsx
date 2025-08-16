@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Store, Package, Calendar, MapPin } from "lucide-react";
+import {
+  ShoppingCart,
+  Store,
+  Package,
+  Calendar,
+  MapPin,
+  AlertCircle,
+} from "lucide-react";
 import { preloadComponent } from "@/utils/preloadUtils";
 
 interface MobileNavigationProps {
@@ -43,6 +50,12 @@ const navigationItems: NavigationItem[] = [
     id: "orders",
     label: "Commandes",
     icon: Calendar,
+    action: "navigate",
+  },
+  {
+    id: "virements",
+    label: "Virements",
+    icon: AlertCircle,
     action: "navigate",
   },
   {

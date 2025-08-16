@@ -11,6 +11,7 @@ import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 export default function HomePage() {
   const { dashboardData, monthlyBenefits, isLoading, error } =
@@ -28,6 +29,15 @@ export default function HomePage() {
     console.log("Loading state:", isLoading);
     console.log("Error state:", error);
 
+    // Debug stock data
+    if (dashboardData?.monthlySales) {
+      console.log("Stock data:", {
+        stock: dashboardData.monthlySales.stock,
+        fragmentStock: dashboardData.monthlySales.fragmentStock,
+        fullData: dashboardData.monthlySales,
+      });
+    }
+
     // Set loaded state after a short delay
     const timer = setTimeout(() => {
       setIsLoaded(true);
@@ -42,6 +52,8 @@ export default function HomePage() {
     if (activeTab === "supermarket-profile") {
       setActiveTab("supermarkets");
       setSelectedSupermarketId("");
+    } else if (activeTab === "virements") {
+      setActiveTab("dashboard");
     } else {
       setActiveTab("dashboard");
     }
@@ -51,6 +63,10 @@ export default function HomePage() {
     // Navigate to supermarket profile
     setSelectedSupermarketId(id);
     setActiveTab("supermarket-profile");
+  };
+
+  const handleVirementsClick = () => {
+    setActiveTab("virements");
   };
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -91,6 +107,7 @@ export default function HomePage() {
                 variant="outline"
                 size="icon"
                 className="rounded-full h-9 w-9 border-gray-200"
+                onClick={handleVirementsClick}
               >
                 <AlertCircle className="h-5 w-5 text-red-500" />
               </Button>
@@ -137,10 +154,48 @@ export default function HomePage() {
           />
         );
 
+      case "virements":
+        return (
+          <div className="space-y-6 pb-20">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-2xl font-bold text-gray-800">Virements</h1>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full h-9 w-9 border-gray-200"
+                onClick={handleBack}
+              >
+                <AlertCircle className="h-5 w-5 text-red-500" />
+              </Button>
+            </div>
+            <p className="text-lg text-gray-800">
+              Virements page content goes here.
+            </p>
+          </div>
+        );
+
       case "find-supermarkets":
-        // For now, redirect to supermarkets tab
-        setActiveTab("supermarkets");
-        return null;
+        // Show the find supermarkets page instead of redirecting
+        return (
+          <div className="space-y-6 pb-20">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-2xl font-bold text-gray-800">
+                Trouver Supermarchés
+              </h1>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full h-9 w-9 border-gray-200"
+                onClick={handleBack}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            </div>
+            <p className="text-lg text-gray-800">
+              Page de recherche de supermarchés.
+            </p>
+          </div>
+        );
 
       default:
         return (
@@ -153,6 +208,7 @@ export default function HomePage() {
                 variant="outline"
                 size="icon"
                 className="rounded-full h-9 w-9 border-gray-200"
+                onClick={handleVirementsClick}
               >
                 <AlertCircle className="h-5 w-5 text-red-500" />
               </Button>

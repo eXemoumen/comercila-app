@@ -42,17 +42,41 @@ import type { Sale, Order, Stock, Payment, Supermarket, FragranceStock } from '.
 
 // Configuration for which data sources to use
 const USE_SUPABASE = {
-    supermarkets: true, // Already migrated
-    sales: true, // Using Supabase
-    orders: true, // Using Supabase
-    stock: true, // Using Supabase
-    fragranceStock: true // Using Supabase
+    supermarkets: true, // Always use Supabase
+    sales: true, // Always use Supabase
+    orders: true, // Always use Supabase
+    stock: true, // Always use Supabase
+    fragranceStock: true // Always use Supabase
 };
+
+// Force Supabase usage - no more local storage fallback
+const FORCE_SUPABASE = true;
 
 // Update configuration based on migration status
 const updateStorageConfig = () => {
     if (typeof window === 'undefined') return;
 
+    // Force Supabase usage if enabled
+    if (FORCE_SUPABASE) {
+        USE_SUPABASE.supermarkets = true;
+        USE_SUPABASE.sales = true;
+        USE_SUPABASE.orders = true;
+        USE_SUPABASE.stock = true;
+        USE_SUPABASE.fragranceStock = true;
+        
+        // Set migration flags to force Supabase
+        localStorage.setItem('supermarket_migration_done', 'true');
+        localStorage.setItem('sales_migration_done', 'true');
+        localStorage.setItem('orders_migration_done', 'true');
+        localStorage.setItem('stock_migration_done', 'true');
+        localStorage.setItem('fragrance_stock_migration_done', 'true');
+        localStorage.setItem('full_migration_complete', 'true');
+        
+        console.log('🚀 Forcing Supabase usage for all data operations');
+        return;
+    }
+
+    // Original migration logic (kept for reference)
     const status = getMigrationStatus();
     if (status) {
         USE_SUPABASE.supermarkets = status.supermarkets;
@@ -69,20 +93,28 @@ updateStorageConfig();
 // Hybrid Sales Functions
 export const getSales = async (): Promise<Sale[]> => {
     updateStorageConfig();
+    console.log('🛒 Getting sales data...');
 
     if (USE_SUPABASE.sales) {
-        return await getSupabaseSales();
+        console.log('📊 Using Supabase for sales data');
+        const sales = await getSupabaseSales();
+        console.log('📊 Supabase sales loaded:', sales.length, 'records');
+        return sales;
     } else {
+        console.log('💾 Using local storage for sales data');
         return getLocalSales();
     }
 };
 
 export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> => {
     updateStorageConfig();
+    console.log('➕ Adding sale data...');
 
     if (USE_SUPABASE.sales) {
+        console.log('📊 Using Supabase to add sale');
         return await addSupabaseSale(saleData);
     } else {
+        console.log('💾 Using local storage to add sale');
         return addLocalSale(saleData);
     }
 };
@@ -249,16 +281,31 @@ export const deleteSupermarket = async (id: string): Promise<boolean> => {
 };
 
 // Helper function to get current stock
-export const getCurrentStock = async (): Promise<{ currentStock: number, fragranceStock: number }> => {
+export const getCurrentStock = async (): Promise<{ currentStock: number; fragranceStock: number }> => {
     updateStorageConfig();
+    console.log('📦 Getting current stock data...');
 
     if (USE_SUPABASE.stock) {
-        const { current_stock, fragrance_stock } = await getSupabaseCurrentStock();
-        return { currentStock: current_stock, fragranceStock: fragrance_stock };
+        console.log('📊 Using Supabase for stock data');
+        const result = await getSupabaseCurrentStock();
+        console.log('📊 Supabase stock result:', result);
+        // Map the properties correctly
+        return { 
+            currentStock: result.current_stock || 0, 
+            fragranceStock: result.fragrance_stock || 0 
+        };
     } else {
+        console.log('💾 Using local storage for stock data');
+        // Get current stock from local storage
+        const stockHistory = await getLocalStockHistory();
+        const currentStock = stockHistory.length > 0 ? stockHistory[stockHistory.length - 1].currentStock : 0;
+        
+        // Get fragrance stock from local storage
         const fragranceStock = await getLocalFragranceStock();
-        const currentStock = fragranceStock.reduce((total, item) => total + item.quantity, 0);
-        return { currentStock, fragranceStock: 0 }; // Local storage doesn't have fragment stock
+        const totalFragranceStock = fragranceStock.reduce((sum: number, item: FragranceStock) => sum + item.quantity, 0);
+        
+        console.log('💾 Local stock result:', { currentStock, fragranceStock: totalFragranceStock });
+        return { currentStock, fragranceStock: totalFragranceStock };
     }
 };
 
