@@ -344,6 +344,29 @@ export const getSupabaseFragranceStock = async (): Promise<FragranceStock[]> => 
     })) || [];
 };
 
+export const getSupabaseCurrentStock = async (): Promise<{ current_stock: number, fragrance_stock: number }> => {
+    const { data, error } = await supabase
+        .from('stock_history')
+        .select('current_stock, fragrance_distribution')
+        .order('date', { ascending: false })
+        .limit(1)
+        .single();
+
+    if (error) {
+        console.error('Error fetching current stock:', error);
+        return { current_stock: 0, fragrance_stock: 0 };
+    }
+
+    if (!data) {
+        return { current_stock: 0, fragrance_stock: 0 };
+    }
+
+        const fragranceStock = Object.values(data.fragrance_distribution || {}).reduce((acc: number, cur) => acc + (cur as number), 0);
+
+    return { current_stock: data.current_stock, fragrance_stock: fragranceStock };
+};
+
+
 export const updateSupabaseFragranceStock = async (fragranceId: string, quantity: number): Promise<FragranceStock | null> => {
     // First try to update existing
     const { data: existing } = await supabase

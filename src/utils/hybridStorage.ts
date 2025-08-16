@@ -247,9 +247,17 @@ export const deleteSupermarket = async (id: string): Promise<boolean> => {
 };
 
 // Helper function to get current stock
-export const getCurrentStock = async (): Promise<number> => {
-    const fragranceStock = await getFragranceStock();
-    return fragranceStock.reduce((total, item) => total + item.quantity, 0);
+export const getCurrentStock = async (): Promise<{ currentStock: number, fragranceStock: number }> => {
+    updateStorageConfig();
+
+    if (USE_SUPABASE.stock) {
+        const { current_stock, fragrance_stock } = await getSupabaseCurrentStock();
+        return { currentStock: current_stock, fragranceStock: fragrance_stock };
+    } else {
+        const fragranceStock = await getLocalFragranceStock();
+        const currentStock = fragranceStock.reduce((total, item) => total + item.quantity, 0);
+        return { currentStock, fragranceStock: 0 }; // Local storage doesn't have fragment stock
+    }
 };
 
 // Force refresh storage configuration (call after migration)

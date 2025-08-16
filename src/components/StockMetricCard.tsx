@@ -4,12 +4,14 @@ import { Package } from "lucide-react";
 
 export interface StockMetricCardProps {
     stock: number;
+    fragmentStock: number;
     maxStock?: number;
     className?: string;
 }
 
 export const StockMetricCard: React.FC<StockMetricCardProps> = React.memo(function StockMetricCard({
     stock,
+    fragmentStock,
     maxStock = 2700,
     className
 }) {
@@ -34,6 +36,9 @@ export const StockMetricCard: React.FC<StockMetricCardProps> = React.memo(functi
                     </div>
                     <div className="text-sm text-gray-500">
                         {stock} pièces
+                    </div>
+                    <div className="text-sm text-gray-500">
+                        {fragmentStock} fragments
                     </div>
                 </div>
                 <div className="text-3xl font-bold text-purple-500">

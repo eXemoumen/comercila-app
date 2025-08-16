@@ -12,6 +12,7 @@ interface MonthlySalesData {
     stock: number;
     supplierPayment: number;
     paidProfit: number;
+    fragmentStock: number;
 }
 
 interface MonthlyData {
@@ -59,6 +60,7 @@ export function useDashboardData(): UseDashboardDataReturn {
             stock: 0,
             supplierPayment: 0,
             paidProfit: 0,
+            fragmentStock: 0,
         },
         salesData: [],
         fragranceStock: [],
@@ -124,7 +126,7 @@ export function useDashboardData(): UseDashboardDataReturn {
                 return acc + sale.quantity * supplierCostPerUnit;
             }, 0);
 
-            const currentStock = await getCurrentStock();
+            const { currentStock, fragranceStock: fragmentStock } = await getCurrentStock();
 
             // Get fragrance stock data for the pie chart
             const fragranceStock = await getFragranceStock();
@@ -166,6 +168,7 @@ export function useDashboardData(): UseDashboardDataReturn {
                     stock: currentStock * 9, // Convert cartons to units
                     supplierPayment: totalSupplierPayment,
                     paidProfit: paidProfit,
+                    fragmentStock: fragmentStock
                 },
                 salesData,
                 fragranceStock: fragranceData,

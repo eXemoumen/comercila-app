@@ -24,7 +24,7 @@ export interface FragranceStockData {
 }
 
 export interface DashboardData {
-    monthlySales: MonthlySalesData;
+    monthlySales: MonthlySalesData & { fragmentStock: number };
     salesData: Array<{ name: string; value: number }>;
     fragranceStock: FragranceStockData[];
 }

@@ -12,6 +12,7 @@ export interface MonthlySalesData {
     stock: number;
     supplierPayment: number;
     paidProfit: number;
+    fragmentStock: number;
 }
 
 export interface MetricsGridProps {
@@ -43,6 +44,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(function Metri
 
             <StockMetricCard
                 stock={metrics.stock}
+                fragmentStock={metrics.fragmentStock}
                 maxStock={maxStock}
             />
 
