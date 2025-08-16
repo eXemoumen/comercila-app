@@ -49,11 +49,11 @@ const USE_SUPABASE = {
     fragranceStock: true // Always use Supabase
 };
 
-// Force Supabase usage - no more local storage fallback
+// Force Supabase usage - but migrate data first
 const FORCE_SUPABASE = true;
 
 // Update configuration based on migration status
-const updateStorageConfig = () => {
+const updateStorageConfig = async () => {
     if (typeof window === 'undefined') return;
 
     // Force Supabase usage if enabled
@@ -73,6 +73,9 @@ const updateStorageConfig = () => {
         localStorage.setItem('full_migration_complete', 'true');
         
         console.log('🚀 Forcing Supabase usage for all data operations');
+        
+        // Run migration if needed
+        await runMigrationIfNeeded();
         return;
     }
 
@@ -85,6 +88,36 @@ const updateStorageConfig = () => {
         USE_SUPABASE.stock = status.stock;
         USE_SUPABASE.fragranceStock = status.fragranceStock;
     }
+};
+
+// Run migration if data exists in localStorage but not in Supabase
+const runMigrationIfNeeded = async () => {
+    try {
+        console.log('🔄 Checking if migration is needed...');
+        
+        // Check if we have local data
+        const hasLocalData = checkLocalDataExists();
+        
+        if (hasLocalData) {
+            console.log('📦 Local data found, running migration...');
+            const { runFullMigration } = await import('./migration');
+            const result = await runFullMigration();
+            console.log('✅ Migration result:', result);
+        } else {
+            console.log('📦 No local data to migrate');
+        }
+    } catch (error) {
+        console.error('❌ Migration error:', error);
+    }
+};
+
+// Check if local data exists
+const checkLocalDataExists = () => {
+    const keys = ['soap_sales', 'soap_orders', 'soap_stock', 'soap_fragrance_stock', 'soap_supermarkets'];
+    return keys.some(key => {
+        const data = localStorage.getItem(key);
+        return data && JSON.parse(data).length > 0;
+    });
 };
 
 // Initialize storage config
