@@ -2,7 +2,8 @@
 
 This is a comprehensive business management application built with [Next.js](https://nextjs.org) for supermarket operations, sales tracking, inventory management, and order processing.
 
-## Recent Refactoring (2024)
+## Recent Refactoring (2025
+)
 
 The application has undergone a major refactoring to improve maintainability and code organization:
 
