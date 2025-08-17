@@ -12,6 +12,10 @@ declare global {
           setStyle?: (options: { style: string }) => void;
           setBackgroundColor?: (options: { color: string }) => void;
         };
+        Network?: {
+          getStatus?: () => Promise<{ connected: boolean; connectionType: string }>;
+          addListener?: (event: string, callback: (status: { connected: boolean; connectionType: string }) => void) => void;
+        };
       };
     };
   }
@@ -25,6 +29,11 @@ export const isMobile = () => {
 export const isNativeApp = () => {
   if (typeof window === 'undefined') return false;
   return window.Capacitor !== undefined;
+};
+
+export const isAndroid = () => {
+  if (typeof window === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent);
 };
 
 // Mobile-specific settings
@@ -41,11 +50,28 @@ export const mobileConfig = {
   // Mobile-optimized charts
   chartHeight: 300,
   
-  // Mobile-specific storage preferences
-  useLocalStorage: true,
+  // Mobile-specific storage preferences - Use Supabase for Android
+  useLocalStorage: false, // Changed to false to force Supabase usage
   
   // Mobile-specific API timeouts
-  apiTimeout: 10000,
+  apiTimeout: 15000, // Increased timeout for mobile networks
+  
+  // Android-specific optimizations
+  android: {
+    // Enable hardware acceleration
+    enableHardwareAcceleration: true,
+    
+    // Optimize for Android WebView
+    webViewOptimizations: true,
+    
+    // Android-specific network handling
+    networkRetryAttempts: 3,
+    networkRetryDelay: 1000,
+    
+    // Android-specific storage
+    useSupabase: true, // Force Supabase usage on Android
+    enableOfflineCache: true,
+  }
 };
 
 // Mobile-specific utility functions
@@ -64,6 +90,9 @@ export const mobileUtils = {
   addMobileClasses: () => {
     if (typeof document !== 'undefined' && isMobile()) {
       document.body.classList.add('mobile-app');
+      if (isAndroid()) {
+        document.body.classList.add('android-app');
+      }
     }
   },
 
@@ -81,6 +110,45 @@ export const mobileUtils = {
       window.Capacitor.Plugins.StatusBar.setBackgroundColor?.({ color: '#9F7AEA' });
     }
   },
+
+  // Check network connectivity (Android-specific)
+  checkNetworkStatus: async () => {
+    if (typeof window !== 'undefined' && window.Capacitor?.Plugins?.Network?.getStatus) {
+      try {
+        const status = await window.Capacitor.Plugins.Network.getStatus();
+        return status.connected;
+      } catch (error) {
+        console.warn('Network status check failed:', error);
+        return navigator.onLine; // Fallback to browser API
+      }
+    }
+    return navigator.onLine;
+  },
+
+  // Android-specific network listener
+  addNetworkListener: (callback: (connected: boolean) => void) => {
+    if (typeof window !== 'undefined' && window.Capacitor?.Plugins?.Network?.addListener) {
+      window.Capacitor.Plugins.Network.addListener('networkStatusChange', (status) => {
+        callback(status.connected);
+      });
+    }
+  },
+
+  // Android-specific optimizations for virements
+  optimizeForVirements: () => {
+    if (isAndroid()) {
+      // Add Android-specific optimizations
+      console.log('🔧 Applying Android-specific optimizations for virements');
+      
+      // Force Supabase usage on Android
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('force_supabase_android', 'true');
+      }
+      
+      // Add Android-specific CSS classes
+      document.body.classList.add('android-virements-optimized');
+    }
+  }
 };
 
 export default mobileConfig; 

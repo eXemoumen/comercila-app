@@ -8,6 +8,7 @@ import { AddSalePage } from "@/components/AddSalePage";
 import { SupermarketsPage } from "@/components/SupermarketsPage";
 import { OrdersPage } from "@/components/OrdersPage";
 import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
+import { VirementsPage } from "@/components/VirementsPage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -155,24 +156,7 @@ export default function HomePage() {
         );
 
       case "virements":
-        return (
-          <div className="space-y-6 pb-20">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold text-gray-800">Virements</h1>
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-full h-9 w-9 border-gray-200"
-                onClick={handleBack}
-              >
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              </Button>
-            </div>
-            <p className="text-lg text-gray-800">
-              Virements page content goes here.
-            </p>
-          </div>
-        );
+        return <VirementsPage onBack={handleBack} />;
 
       case "find-supermarkets":
         // Show the find supermarkets page instead of redirecting

@@ -41,6 +41,7 @@ import {
 import { getMigrationStatus } from './migration';
 import { supabase } from '@/lib/supabase';
 import type { Sale, Order, Stock, Payment, Supermarket, FragranceStock } from './storage';
+import { isAndroid } from './mobileConfig';
 
 // Configuration for which data sources to use
 const USE_SUPABASE = {
@@ -58,8 +59,8 @@ const FORCE_SUPABASE = true;
 const updateStorageConfig = async () => {
     if (typeof window === 'undefined') return;
 
-    // Force Supabase usage if enabled
-    if (FORCE_SUPABASE) {
+    // Force Supabase usage if enabled or on Android
+    if (FORCE_SUPABASE || isAndroid()) {
         USE_SUPABASE.supermarkets = true;
         USE_SUPABASE.sales = true;
         USE_SUPABASE.orders = true;
@@ -73,6 +74,12 @@ const updateStorageConfig = async () => {
         localStorage.setItem('stock_migration_done', 'true');
         localStorage.setItem('fragrance_stock_migration_done', 'true');
         localStorage.setItem('full_migration_complete', 'true');
+        
+        // Android-specific flag
+        if (isAndroid()) {
+            localStorage.setItem('force_supabase_android', 'true');
+            console.log('🤖 Android detected - forcing Supabase usage');
+        }
         
         console.log('🚀 Forcing Supabase usage for all data operations');
         
