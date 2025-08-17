@@ -2,7 +2,14 @@ import React from "react";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { LucideIcon } from "lucide-react";
 
-export type MetricCardColor = "blue" | "green" | "amber" | "purple" | "red";
+export type MetricCardColor =
+  | "blue"
+  | "green"
+  | "amber"
+  | "purple"
+  | "red"
+  | "emerald"
+  | "indigo";
 
 export interface MetricCardProps {
   title: string;
@@ -62,6 +69,20 @@ const colorConfig: Record<
     background: "bg-red-100",
     progressBar: "bg-red-500",
   },
+  emerald: {
+    gradient: "bg-gradient-to-br from-emerald-500 to-emerald-600",
+    text: "text-emerald-600",
+    accent: "text-emerald-500",
+    background: "bg-emerald-100",
+    progressBar: "bg-emerald-500",
+  },
+  indigo: {
+    gradient: "bg-gradient-to-br from-indigo-500 to-indigo-600",
+    text: "text-indigo-600",
+    accent: "text-indigo-500",
+    background: "bg-indigo-100",
+    progressBar: "bg-indigo-500",
+  },
 };
 
 export const MetricCard: React.FC<MetricCardProps> = ({
@@ -76,7 +97,8 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   className = "",
   children,
 }) => {
-  const config = colorConfig[color];
+  // Safety check: if color doesn't exist, default to blue
+  const config = colorConfig[color] || colorConfig.blue;
 
   return (
     <Card
