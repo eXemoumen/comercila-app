@@ -18,7 +18,8 @@ import {
   calculateSupplierReturn,
 } from "@/utils/virementCalculations";
 import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
-import type { Sale, Supermarket } from "@/types/index";
+import type { Sale } from "@/types/index";
+import type { Supermarket } from "@/utils/storage";
 
 interface VirementsPageProps {
   onBack: () => void;
@@ -129,7 +130,11 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
     if (isNaN(amount) || amount <= 0) return;
 
     try {
-      await addPayment(selectedSale.id, amount, paymentNote);
+      await addPayment(selectedSale.id, {
+        date: new Date().toISOString(),
+        amount: amount,
+        note: paymentNote,
+      });
 
       // Reload sales data
       const updatedSales = await getSales();

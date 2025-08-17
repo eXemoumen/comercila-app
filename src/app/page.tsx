@@ -9,6 +9,7 @@ import { SupermarketsPage } from "@/components/SupermarketsPage";
 import { OrdersPage } from "@/components/OrdersPage";
 import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { VirementsPage } from "@/components/VirementsPage";
+import { MobileDebugInfo } from "@/components/MobileDebugInfo";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -218,6 +219,9 @@ export default function HomePage() {
       onToggleMobileMenu={() => setShowMobileMenu(!showMobileMenu)}
     >
       {renderContent()}
+
+      {/* Temporary debug info - remove after fixing mobile issues */}
+      <MobileDebugInfo />
     </DashboardLayout>
   );
 }

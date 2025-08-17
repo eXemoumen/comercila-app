@@ -12,7 +12,8 @@ import {
 import { Button } from "./ui/button";
 import { getSupermarkets } from "@/utils/hybridStorage";
 import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
-import type { Sale, Supermarket } from "@/types/index";
+import type { Sale } from "@/types/index";
+import type { Supermarket } from "@/utils/storage";
 
 interface MonthlySalesDetailModalProps {
   isOpen: boolean;
@@ -39,21 +40,6 @@ export const MonthlySalesDetailModal: React.FC<
     salesTable: false,
   });
 
-  useEffect(() => {
-    const loadSupermarkets = async () => {
-      try {
-        const data = await getSupermarkets();
-        setSupermarkets(data);
-      } catch (error) {
-        console.error("Error loading supermarkets:", error);
-      }
-    };
-
-    if (isOpen) {
-      loadSupermarkets();
-    }
-  }, [isOpen]);
-
   // Check if mobile and apply Android optimizations
   useEffect(() => {
     const checkMobile = () => {
@@ -71,10 +57,25 @@ export const MonthlySalesDetailModal: React.FC<
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    const loadSupermarkets = async () => {
+      try {
+        const data = await getSupermarkets();
+        setSupermarkets(data);
+      } catch (error) {
+        console.error("Error loading supermarkets:", error);
+      }
+    };
+
+    if (isOpen) {
+      loadSupermarkets();
+    }
+  }, [isOpen]);
 
   // Filter sales for this specific month
   const monthSales = useMemo(() => {
+    if (!isOpen) return [];
+
     return sales.filter((sale) => {
       const saleDate = new Date(sale.date);
       const saleMonth = saleDate.toLocaleDateString("fr-FR", {
@@ -86,10 +87,17 @@ export const MonthlySalesDetailModal: React.FC<
         saleMonth.charAt(0).toUpperCase() + saleMonth.slice(1);
       return formattedSaleMonth === monthName;
     });
-  }, [sales, monthName]);
+  }, [sales, monthName, isOpen]);
 
   // Calculate payment statistics
   const paymentStats = useMemo(() => {
+    if (!isOpen)
+      return {
+        directPaid: { count: 0, value: 0, benefit: 0 },
+        virementPaid: { count: 0, value: 0, benefit: 0 },
+        unpaid: { count: 0, value: 0, benefit: 0 },
+      };
+
     const directPaid = monthSales.filter(
       (sale) => sale.isPaid && sale.payments.length === 1
     );
@@ -127,7 +135,9 @@ export const MonthlySalesDetailModal: React.FC<
         }, 0),
       },
     };
-  }, [monthSales]);
+  }, [monthSales, isOpen]);
+
+  if (!isOpen) return null;
 
   const getSupermarketName = (supermarketId: string) => {
     const supermarket = supermarkets.find((s) => s.id === supermarketId);
@@ -393,15 +403,15 @@ export const MonthlySalesDetailModal: React.FC<
                   <div className="text-sm text-blue-700 mb-3">
                     <p className="mb-2">
                       <strong>Important:</strong> Les bénéfices de ces ventes
-                      apparaissent dans le "Bénéfice Réel" du mois où le
-                      virement a été <strong>terminé</strong>, pas du mois où la
-                      vente a été faite.
+                      apparaissent dans le &quot;Bénéfice Réel&quot; du mois où
+                      le virement a été <strong>terminé</strong>, pas du mois où
+                      la vente a été faite.
                     </p>
                   </div>
                   <div className="space-y-3">
                     {monthSales
                       .filter((sale) => sale.isPaid && sale.payments.length > 1)
-                      .map((sale, index) => {
+                      .map((sale) => {
                         const completionDate =
                           sale.paymentDate ||
                           (sale.payments.length > 0
@@ -469,7 +479,7 @@ export const MonthlySalesDetailModal: React.FC<
                 {isMobile ? (
                   // Mobile-friendly card layout
                   <div className="space-y-3">
-                    {monthSales.map((sale, index) => {
+                    {monthSales.map((sale) => {
                       const paymentStatus = getPaymentStatus(sale);
                       const StatusIcon = paymentStatus.icon;
                       const benefitPerUnit =
@@ -628,7 +638,7 @@ export const MonthlySalesDetailModal: React.FC<
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {monthSales.map((sale, index) => {
+                        {monthSales.map((sale) => {
                           const paymentStatus = getPaymentStatus(sale);
                           const StatusIcon = paymentStatus.icon;
                           const benefitPerUnit =
@@ -640,12 +650,7 @@ export const MonthlySalesDetailModal: React.FC<
                           const totalBenefit = sale.quantity * benefitPerUnit;
 
                           return (
-                            <tr
-                              key={sale.id}
-                              className={
-                                index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                              }
-                            >
+                            <tr key={sale.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   {formatDate(sale.date)}
@@ -724,7 +729,7 @@ export const MonthlySalesDetailModal: React.FC<
                                             au total
                                           </p>
                                           {sale.payments.length > 0 && (
-                                            <p className="text-gray-500 text-xs">
+                                            <p className="text-xs text-gray-500">
                                               Dernier paiement:{" "}
                                               {formatDate(
                                                 sale.payments[

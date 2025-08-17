@@ -162,7 +162,7 @@ export const mobileUtils = {
     const modals = document.querySelectorAll('.modal, [role="dialog"]');
     modals.forEach(modal => {
       if (modal instanceof HTMLElement) {
-        modal.style.webkitOverflowScrolling = 'touch';
+        (modal.style as CSSStyleDeclaration & { webkitOverflowScrolling: string }).webkitOverflowScrolling = 'touch';
         modal.style.overscrollBehavior = 'contain';
       }
     });
@@ -189,7 +189,7 @@ export const mobileUtils = {
     });
 
     // Handle back button on mobile
-    if (isAndroid()) {
+      if (isAndroid()) {
       this.handleAndroidBackButton();
     }
   },

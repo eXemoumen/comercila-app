@@ -98,7 +98,7 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
     }
   }, 0);
 
-  const handleMonthClick = (monthName: string, monthData: MonthlyData) => {
+  const handleMonthClick = (monthName: string) => {
     setSelectedMonth(monthName);
     setShowSalesDetail(true);
   };
@@ -235,7 +235,8 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
                   {isMobile ? (
                     // Mobile-friendly card layout
                     <div className="space-y-3">
-                      {sortedMonths.map(([monthName, monthData], index) => {
+                      {sortedMonths.map(([monthName]) => {
+                        const monthData = monthlyBenefits[monthName];
                         const hasData = monthData.value > 0;
                         const isPaid = type === "paid" ? hasData : true;
 
@@ -248,7 +249,7 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
                                 : "bg-gray-50 border-gray-200"
                             }`}
                             onClick={() =>
-                              hasData && handleMonthClick(monthName, monthData)
+                              hasData && handleMonthClick(monthName)
                             }
                           >
                             <div className="p-4">
@@ -352,7 +353,8 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {sortedMonths.map(([monthName, monthData], index) => {
+                          {sortedMonths.map(([monthName]) => {
+                            const monthData = monthlyBenefits[monthName];
                             const hasData = monthData.value > 0;
                             const isPaid = type === "paid" ? hasData : true;
 
@@ -360,15 +362,12 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
                               <tr
                                 key={monthName}
                                 className={`${
-                                  index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                                } ${
                                   hasData
                                     ? "cursor-pointer hover:bg-blue-50 transition-colors"
                                     : ""
                                 }`}
                                 onClick={() =>
-                                  hasData &&
-                                  handleMonthClick(monthName, monthData)
+                                  hasData && handleMonthClick(monthName)
                                 }
                               >
                                 <td className="px-6 py-4 whitespace-nowrap">

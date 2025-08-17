@@ -2,7 +2,7 @@ import React from "react";
 import { MetricCard } from "./MetricCard";
 import { ProfitMetricCard } from "./ProfitMetricCard";
 import { PaidProfitMetricCard } from "./PaidProfitMetricCard";
-import { TrendingUp, DollarSign, Package, Truck } from "lucide-react";
+import { DollarSign, Package, Truck } from "lucide-react";
 import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
 
 export interface MonthlySalesData {
@@ -36,8 +36,21 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
     React.useEffect(() => {
+      console.log("🔍 MetricsGrid Mobile Check:", {
+        isMobile,
+        windowWidth: window.innerWidth,
+        isAndroid:
+          typeof window !== "undefined" &&
+          window.navigator.userAgent.toLowerCase().includes("android"),
+      });
+
       if (isAndroid() && isMobile) {
-        mobileUtils.optimizeTouchInteractions();
+        console.log("🤖 Android mobile detected - applying optimizations");
+        mobileUtils.optimizeForVirements();
+      } else if (isMobile) {
+        console.log("📱 Mobile detected (non-Android)");
+      } else {
+        console.log("🖥️ Desktop detected");
       }
     }, [isMobile]);
 
@@ -45,6 +58,14 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
     const stockPercentage = Math.round((metrics.stock / maxStock) * 100);
     const stockColor =
       stockPercentage > 80 ? "red" : stockPercentage > 60 ? "amber" : "green";
+
+    console.log("🎨 MetricsGrid Rendering:", {
+      isMobile,
+      stockPercentage,
+      stockColor,
+      hasProfitClick: !!onProfitCardClick,
+      hasPaidProfitClick: !!onPaidProfitCardClick,
+    });
 
     return (
       <div
