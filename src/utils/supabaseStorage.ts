@@ -668,12 +668,12 @@ export const syncFragranceStockWithHistory = async (): Promise<void> => {
                 
                 // Add or subtract based on the type
                 if (record.type === 'added') {
-                    fragranceStock[fragranceId] += quantity;
+                    fragranceStock[fragranceId] += quantity as number;
                 } else if (record.type === 'removed') {
-                    fragranceStock[fragranceId] -= quantity;
+                    fragranceStock[fragranceId] -= quantity as number;
                 } else if (record.type === 'adjusted') {
                     // For adjustments, we directly add the quantity (could be negative)
-                    fragranceStock[fragranceId] += quantity;
+                    fragranceStock[fragranceId] += quantity as number;
                 }
             });
         }

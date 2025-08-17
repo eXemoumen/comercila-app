@@ -43,12 +43,12 @@ async function syncFragranceStockWithHistory() {
 
           // Add or subtract based on the type
           if (record.type === "added") {
-            fragranceStock[fragranceId] += quantity;
+            fragranceStock[fragranceId] += Number(quantity);
           } else if (record.type === "removed") {
-            fragranceStock[fragranceId] -= quantity;
+            fragranceStock[fragranceId] -= Number(quantity);
           } else if (record.type === "adjusted") {
             // For adjustments, we directly add the quantity (could be negative)
-            fragranceStock[fragranceId] += quantity;
+            fragranceStock[fragranceId] += Number(quantity);
           }
         }
       );
