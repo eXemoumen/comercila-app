@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Bell, Settings, Check, Trash2, ChevronLeft } from "lucide-react";
+import { ArrowLeft, Bell, Settings, Check, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { notificationService } from "@/services/notificationService";
-import {
-  Notification as AppNotification,
-  NotificationCounts,
-} from "@/types/notifications";
+import { Notification as AppNotification } from "@/types/notifications";
 import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
-import { NotificationSettings } from "./NotificationSettings";
 
 interface NotificationsPageProps {
   onBack: () => void;
@@ -19,14 +15,13 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
   onNavigate,
 }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [counts, setCounts] = useState<NotificationCounts>({
+  const [counts, setCounts] = useState({
     total: 0,
     unread: 0,
     urgent: 0,
     byType: {} as Record<string, number>,
   });
   const [isMobile, setIsMobile] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -66,8 +61,10 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
 
     // Navigate to action URL if provided
     if (notification.actionUrl && onNavigate) {
-      const route = notification.actionUrl.replace("/", "");
-      onNavigate(route);
+      const route = mapActionUrlToTab(notification.actionUrl);
+      if (route) {
+        onNavigate(route);
+      }
     }
 
     loadNotifications();
@@ -84,8 +81,10 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
 
     // Navigate to the correct page
     if (notification.actionUrl && onNavigate) {
-      const route = notification.actionUrl.replace("/", "");
-      onNavigate(route);
+      const route = mapActionUrlToTab(notification.actionUrl);
+      if (route) {
+        onNavigate(route);
+      }
     }
 
     loadNotifications();
@@ -150,6 +149,25 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
     return date.toLocaleDateString("fr-FR");
   };
 
+  const mapActionUrlToTab = (actionUrl: string): string => {
+    // Map notification action URLs to app tab names
+    switch (actionUrl) {
+      case "virements":
+        return "virements";
+      case "stock":
+        return "stock";
+      case "orders":
+        return "orders";
+      case "supermarkets":
+        return "supermarkets";
+      case "add-sale":
+        return "add-sale";
+      default:
+        // Remove leading slash if present
+        return actionUrl.replace("/", "");
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {/* Header */}
@@ -165,7 +183,7 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
               minWidth: isMobile ? "44px" : "auto",
             }}
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
@@ -178,45 +196,40 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
 
         <div className="flex items-center space-x-2">
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSettings(true)}
-            className="flex items-center space-x-2"
+            variant="ghost"
+            size="icon"
+            onClick={() => onNavigate?.("settings")}
+            className="text-gray-600 hover:text-gray-900"
             style={{
               minHeight: isMobile ? "44px" : "auto",
-              minWidth: isMobile ? "auto" : "auto",
+              minWidth: isMobile ? "44px" : "auto",
             }}
           >
-            <Settings className="h-4 w-4" />
-            <span className={isMobile ? "hidden" : "inline"}>Paramètres</span>
+            <Settings className="h-5 w-5" />
           </Button>
-
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={markAllAsRead}
-            className="flex items-center space-x-2"
+            className="text-gray-600 hover:text-gray-900"
             style={{
               minHeight: isMobile ? "44px" : "auto",
-              minWidth: isMobile ? "auto" : "auto",
+              minWidth: isMobile ? "44px" : "auto",
             }}
           >
-            <Check className="h-4 w-4" />
-            <span className={isMobile ? "hidden" : "inline"}>Tout lire</span>
+            <Check className="h-5 w-5" />
           </Button>
-
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={clearAll}
-            className="flex items-center space-x-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="text-gray-600 hover:text-gray-900"
             style={{
               minHeight: isMobile ? "44px" : "auto",
-              minWidth: isMobile ? "auto" : "auto",
+              minWidth: isMobile ? "44px" : "auto",
             }}
           >
-            <Trash2 className="h-4 w-4" />
-            <span className={isMobile ? "hidden" : "inline"}>Effacer</span>
+            <Trash2 className="h-5 w-5" />
           </Button>
         </div>
       </div>
@@ -309,10 +322,7 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
       </div>
 
       {/* Notification Settings Modal */}
-      <NotificationSettings
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-      />
+      {/* Removed NotificationSettings modal */}
     </div>
   );
 };

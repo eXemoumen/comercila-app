@@ -15,6 +15,8 @@ import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import { ChevronLeft } from "lucide-react";
+import { SettingsPage } from "@/components/SettingsPage";
+import { Settings } from "lucide-react";
 
 export default function HomePage() {
   const { dashboardData, monthlyBenefits, isLoading, error } =
@@ -109,6 +111,18 @@ export default function HomePage() {
               <div className="flex items-center space-x-2">
                 <NotificationBell onNavigate={setActiveTab} />
                 <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setActiveTab("settings")}
+                  className="text-gray-600 hover:text-gray-900"
+                  style={{
+                    minHeight: "44px",
+                    minWidth: "44px",
+                  }}
+                >
+                  <Settings className="h-5 w-5" />
+                </Button>
+                <Button
                   variant="outline"
                   size="icon"
                   className="rounded-full h-9 w-9 border-gray-200"
@@ -164,7 +178,19 @@ export default function HomePage() {
         return <VirementsPage onBack={handleBack} />;
 
       case "notifications":
-        return <NotificationsPage onBack={handleBack} />;
+        return (
+          <NotificationsPage
+            onBack={() => setActiveTab("dashboard")}
+            onNavigate={setActiveTab}
+          />
+        );
+      case "settings":
+        return (
+          <SettingsPage
+            onBack={() => setActiveTab("dashboard")}
+            onNavigate={setActiveTab}
+          />
+        );
 
       case "find-supermarkets":
         // Show the find supermarkets page instead of redirecting

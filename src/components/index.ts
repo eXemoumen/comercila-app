@@ -19,4 +19,5 @@ export { MonthlySalesDetailModal } from "./MonthlySalesDetailModal";
 export { NotificationBell } from "./NotificationBell";
 export { NotificationSettings } from "./NotificationSettings";
 export { NotificationsPage } from "./NotificationsPage";
+export { SettingsPage } from './SettingsPage';
 export { MobileDebugInfo } from "./MobileDebugInfo";

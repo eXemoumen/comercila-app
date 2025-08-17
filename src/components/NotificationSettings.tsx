@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Settings, Bell, Volume2, Smartphone, Shield, X } from "lucide-react";
+import {
+  Settings,
+  Bell,
+  Volume2,
+  Smartphone,
+  Shield,
+  X,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import { notificationService } from "@/services/notificationService";
+import { nativeNotificationService } from "@/services/nativeNotificationService";
 import { NotificationSettings as NotificationSettingsType } from "@/types/notifications";
 import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
+import { Capacitor } from "@capacitor/core";
 
 interface NotificationSettingsProps {
   isOpen: boolean;
@@ -26,6 +37,11 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   });
   const [isMobile, setIsMobile] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<string>("default");
+  const [isNativePlatform, setIsNativePlatform] = useState(false);
+  const [testStatus, setTestStatus] = useState<{
+    type: "success" | "error" | "info" | null;
+    message: string;
+  }>({ type: null, message: "" });
 
   useEffect(() => {
     const checkMobile = () => {
@@ -46,6 +62,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
     if (isOpen) {
       loadSettings();
       checkPermissionStatus();
+      setIsNativePlatform(Capacitor.isNativePlatform());
     }
   }, [isOpen]);
 
@@ -70,26 +87,108 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   };
 
   const requestNotificationPermission = async () => {
-    const granted = await notificationService.requestPermission();
-    if (granted) {
-      setPermissionStatus("granted");
+    try {
+      console.log("Requesting notification permission...");
+      setTestStatus({
+        type: "info",
+        message: "Demande d'autorisation en cours...",
+      });
+
+      const granted = await nativeNotificationService.requestPermission();
+
+      if (granted) {
+        setPermissionStatus("granted");
+        setTestStatus({
+          type: "success",
+          message:
+            "Notifications autorisées avec succès! Vous pouvez maintenant tester les notifications natives.",
+        });
+
+        // Clear status after 3 seconds
+        setTimeout(() => setTestStatus({ type: null, message: "" }), 3000);
+      } else {
+        setTestStatus({
+          type: "error",
+          message:
+            "Impossible d'autoriser les notifications. Vérifiez les paramètres de votre appareil.",
+        });
+
+        // Clear status after 5 seconds
+        setTimeout(() => setTestStatus({ type: null, message: "" }), 5000);
+      }
+    } catch (error) {
+      console.error("Error requesting permission:", error);
+      setTestStatus({
+        type: "error",
+        message: "Erreur lors de la demande d'autorisation des notifications.",
+      });
+
+      // Clear status after 5 seconds
+      setTimeout(() => setTestStatus({ type: null, message: "" }), 5000);
     }
   };
 
-  const testNotification = () => {
-    const testNotification = {
-      id: "test",
-      type: "system" as const,
-      title: "Test de notification",
-      message:
-        "Ceci est un test de notification pour vérifier que tout fonctionne correctement.",
-      priority: "medium" as const,
-      timestamp: new Date().toISOString(),
-      isRead: false,
-      isDismissed: false,
-    };
+  const testNotification = async () => {
+    try {
+      setTestStatus({
+        type: "info",
+        message: "Envoi de la notification de test...",
+      });
+      await nativeNotificationService.testNotification();
+      setTestStatus({
+        type: "success",
+        message:
+          "Notification de test envoyée! Vérifiez votre centre de notifications.",
+      });
 
-    notificationService.addNotification(testNotification);
+      // Clear status after 3 seconds
+      setTimeout(() => setTestStatus({ type: null, message: "" }), 3000);
+    } catch {
+      setTestStatus({
+        type: "error",
+        message: "Erreur lors de l'envoi de la notification de test.",
+      });
+
+      // Clear status after 5 seconds
+      setTimeout(() => setTestStatus({ type: null, message: "" }), 5000);
+    }
+  };
+
+  const testNativeNotification = async () => {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        setTestStatus({
+          type: "info",
+          message: "Envoi de la notification native...",
+        });
+        await nativeNotificationService.testNativeNotification();
+        setTestStatus({
+          type: "success",
+          message:
+            "Notification native envoyée! Elle devrait apparaître en dehors de l&apos;app.",
+        });
+
+        // Clear status after 3 seconds
+        setTimeout(() => setTestStatus({ type: null, message: "" }), 3000);
+      } catch {
+        setTestStatus({
+          type: "error",
+          message: "Erreur lors de l'envoi de la notification native.",
+        });
+
+        // Clear status after 5 seconds
+        setTimeout(() => setTestStatus({ type: null, message: "" }), 5000);
+      }
+    } else {
+      setTestStatus({
+        type: "error",
+        message:
+          "Notifications natives non supportées sur le web. Testez sur Android pour voir les notifications système.",
+      });
+
+      // Clear status after 5 seconds
+      setTimeout(() => setTestStatus({ type: null, message: "" }), 5000);
+    }
   };
 
   if (!isOpen) return null;
@@ -134,6 +233,44 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
         {/* Content */}
         <div className="overflow-y-auto p-4 space-y-6 max-h-[calc(95vh-80px)]">
+          {/* Status Messages */}
+          {testStatus.type && (
+            <div
+              className={`p-4 rounded-lg border ${
+                testStatus.type === "success"
+                  ? "bg-green-50 border-green-200 text-green-800"
+                  : testStatus.type === "error"
+                  ? "bg-red-50 border-red-200 text-red-800"
+                  : "bg-blue-50 border-blue-200 text-blue-800"
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                {testStatus.type === "success" ? (
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                ) : testStatus.type === "error" ? (
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                ) : (
+                  <Bell className="h-5 w-5 text-blue-600" />
+                )}
+                <span className="text-sm font-medium">
+                  {testStatus.message}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Platform Info */}
+          {isNativePlatform && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Smartphone className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-blue-800">
+                  Plateforme native détectée - Notifications système disponibles
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Notification Types */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 flex items-center space-x-2">
@@ -353,7 +490,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {/* Test Section */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">Test</h3>
-            <div className="flex space-x-3">
+            <div className="flex flex-col space-y-3">
               <Button
                 onClick={testNotification}
                 variant="outline"
@@ -366,7 +503,30 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 <Bell className="h-4 w-4" />
                 <span>Tester les notifications</span>
               </Button>
+
+              <Button
+                onClick={testNativeNotification}
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                style={{
+                  minHeight: isMobile ? "44px" : "auto",
+                }}
+              >
+                <Smartphone className="h-4 w-4 mr-2" />
+                Tester notification native
+              </Button>
             </div>
+
+            {isNativePlatform && (
+              <div className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg">
+                <p>
+                  <strong>Note:</strong> Les notifications natives apparaissent
+                  en dehors de l&apos;application, comme les notifications
+                  d&apos;Instagram et Facebook. Assurez-vous que les
+                  notifications sont activées dans les paramètres de votre
+                  appareil.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

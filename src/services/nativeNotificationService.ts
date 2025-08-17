@@ -1,28 +1,9 @@
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Capacitor } from '@capacitor/core';
 import { Notification as AppNotification, NotificationType, NotificationSettings } from '@/types/notifications';
 import { Sale } from '@/types/index';
-import { Order } from '@/utils/storage';
 
-// Define browser notification types
-interface BrowserNotificationConstructor {
-  new(title: string, options?: NotificationOptions): Notification;
-  permission: NotificationPermission;
-  requestPermission(): Promise<NotificationPermission>;
-}
-
-interface NotificationOptions {
-  body?: string;
-  icon?: string;
-  tag?: string;
-}
-
-// Define webkit audio context interface
-interface WindowWithWebkitAudio extends Window {
-  webkitAudioContext?: {
-    new(): AudioContext;
-  };
-}
-
-class NotificationService {
+class NativeNotificationService {
   private notifications: AppNotification[] = [];
   private settings: NotificationSettings = {
     paymentDue: true,
@@ -34,10 +15,89 @@ class NotificationService {
     vibrationEnabled: true,
     pushNotifications: true
   };
+  private isNativePlatform: boolean;
 
   constructor() {
+    this.isNativePlatform = Capacitor.isNativePlatform();
     this.loadNotifications();
     this.loadSettings();
+    
+    // Initialize local notifications on native platforms
+    if (this.isNativePlatform) {
+      this.initializeLocalNotifications();
+    }
+  }
+
+  // Initialize local notifications
+  private async initializeLocalNotifications(): Promise<void> {
+    try {
+      // Request permission for local notifications
+      const permission = await LocalNotifications.requestPermissions();
+      
+      if (permission.display === 'granted') {
+        console.log('Local notification permission granted');
+        this.setupNotificationListeners();
+        this.createNotificationChannel();
+      } else {
+        console.log('Local notification permission denied');
+      }
+    } catch (error) {
+      console.error('Error initializing local notifications:', error);
+    }
+  }
+
+  // Setup notification event listeners
+  private setupNotificationListeners(): void {
+    // Listen for notification received while app is in foreground
+    LocalNotifications.addListener('localNotificationReceived', (notification) => {
+      console.log('Notification received:', notification);
+      // Handle notification received event
+      this.handleNotificationReceived(notification);
+    });
+
+    // Listen for notification action clicked
+    LocalNotifications.addListener('localNotificationActionPerformed', (notificationAction) => {
+      console.log('Notification action performed:', notificationAction);
+      // Handle notification action
+      this.handleNotificationAction(notificationAction);
+    });
+  }
+
+  // Create notification channel for Android
+  private async createNotificationChannel(): Promise<void> {
+    try {
+      await LocalNotifications.createChannel({
+        id: 'default',
+        name: 'Default Channel',
+        description: 'Default notification channel',
+        importance: 4, // High importance
+        visibility: 1, // Public visibility
+        sound: this.settings.soundEnabled ? 'default' : undefined,
+        vibration: this.settings.vibrationEnabled,
+        lights: true,
+        lightColor: '#FF0000'
+      });
+      console.log('Notification channel created successfully');
+    } catch (error) {
+      console.error('Error creating notification channel:', error);
+    }
+  }
+
+  // Handle notification received
+  private handleNotificationReceived(notification: any): void {
+    // You can add custom logic here when notification is received
+    console.log('Handling notification received:', notification);
+  }
+
+  // Handle notification action
+  private handleNotificationAction(notificationAction: any): void {
+    const { actionId, notification } = notificationAction;
+    
+    if (actionId === 'OPEN_APP') {
+      // Handle app opening action
+      console.log('Opening app from notification');
+      // You can add navigation logic here
+    }
   }
 
   // Load notifications from localStorage
@@ -148,54 +208,6 @@ class NotificationService {
     });
   }
 
-  // Generate order notifications
-  generateOrderNotifications(orders: Order[]): void {
-    if (!this.settings.orderUpdates) return;
-
-    orders.forEach(order => {
-      if (order.status === 'pending') {
-        const notification: AppNotification = {
-          id: `order_pending_${order.id}`,
-          type: 'order_scheduled',
-          title: 'Commande en attente',
-          message: `Commande ${order.id} pour ${order.supermarketName} - ${order.quantity} unités en attente de livraison`,
-          priority: 'medium',
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          isDismissed: false,
-          actionUrl: 'orders',
-          actionText: 'Voir les commandes',
-          metadata: {
-            orderId: order.id,
-            supermarketId: order.supermarketId,
-            quantity: order.quantity
-          }
-        };
-
-        this.addNotification(notification);
-      } else if (order.status === 'delivered') {
-        const notification: AppNotification = {
-          id: `order_delivered_${order.id}`,
-          type: 'order_delivered',
-          title: 'Commande livrée',
-          message: `Commande ${order.id} livrée avec succès à ${order.supermarketName}`,
-          priority: 'low',
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          isDismissed: false,
-          actionUrl: 'orders',
-          actionText: 'Voir les commandes',
-          metadata: {
-            orderId: order.id,
-            supermarketId: order.supermarketId
-          }
-        };
-
-        this.addNotification(notification);
-      }
-    });
-  }
-
   // Generate stock alert notifications
   generateStockAlerts(currentStock: number, maxStock: number = 2700): void {
     if (!this.settings.stockAlerts) return;
@@ -261,93 +273,97 @@ class NotificationService {
     }
 
     this.saveNotifications();
-    this.showNotification(notification);
+    this.showNativeNotification(notification);
   }
 
-  // Show notification (browser notification + sound/vibration)
-  private showNotification(notification: AppNotification): void {
-    // Browser notification
-    if (this.settings.pushNotifications && 'Notification' in window) {
-      const BrowserNotification = (window as WindowWithWebkitAudio & { Notification: BrowserNotificationConstructor }).Notification;
-      if (BrowserNotification.permission === 'granted') {
-        try {
-          new BrowserNotification(notification.title, {
-            body: notification.message,
-            icon: '/favicon.ico',
-            tag: notification.id
-          });
-        } catch (error) {
-          console.log('Browser notification failed, using fallback:', error);
-          this.showInAppNotification(notification);
-        }
-      } else {
-        // Fallback to in-app notification
-        this.showInAppNotification(notification);
-      }
-    } else {
-      // Fallback to in-app notification
-      this.showInAppNotification(notification);
+  // Show native notification
+  private async showNativeNotification(notification: AppNotification): Promise<void> {
+    if (!this.isNativePlatform) {
+      console.log('Native notifications not supported on web platform');
+      return;
     }
 
-    // Sound notification
-    if (this.settings.soundEnabled) {
-      this.playNotificationSound();
-    }
-
-    // Vibration notification
-    if (this.settings.vibrationEnabled && 'vibrate' in navigator) {
-      navigator.vibrate(200);
-    }
-  }
-
-  // Fallback in-app notification system
-  private showInAppNotification(notification: AppNotification): void {
-    // Create a simple in-app notification toast
-    const toast = document.createElement('div');
-    toast.className = 'fixed top-4 right-4 bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 max-w-sm';
-    toast.innerHTML = `
-      <div class="font-medium">${notification.title}</div>
-      <div class="text-sm opacity-90">${notification.message}</div>
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.parentNode.removeChild(toast);
-      }
-    }, 5000);
-  }
-
-  // Play notification sound
-  private playNotificationSound(): void {
     try {
-      const audio = new Audio('/notification.mp3');
-      audio.volume = 0.5;
-      audio.play().catch(() => {
-        // Fallback: create a simple beep sound
-        const AudioContextClass = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext;
-        if (AudioContextClass) {
-          const audioContext = new AudioContextClass();
-          const oscillator = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-          
-          oscillator.frequency.value = 800;
-          oscillator.type = 'sine';
-          
-          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-          
-          oscillator.start(audioContext.currentTime);
-          oscillator.stop(audioContext.currentTime + 0.1);
-        }
+      // Use non-exact scheduling to avoid the warning
+      const scheduleTime = new Date(Date.now() + 1000); // Show after 1 second
+      
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: notification.title,
+            body: notification.message,
+            id: Math.floor(Math.random() * 1000000), // Use smaller integer for Java compatibility
+            schedule: { 
+              at: scheduleTime,
+              // Use non-exact scheduling to avoid warnings
+              repeats: false
+            },
+            sound: this.settings.soundEnabled ? 'default' : undefined,
+            actionTypeId: 'OPEN_APP',
+            channelId: 'default',
+            extra: {
+              actionUrl: notification.actionUrl,
+              actionText: notification.actionText,
+              ...notification.metadata
+            }
+          }
+        ]
       });
-    } catch {
-      console.log('Could not play notification sound');
+      
+      console.log('Native notification scheduled successfully for:', scheduleTime);
+    } catch (error) {
+      console.error('Error showing native notification:', error);
+    }
+  }
+
+  // Test notification
+  async testNotification(): Promise<void> {
+    const testNotification: AppNotification = {
+      id: 'test',
+      type: 'system',
+      title: 'Test de notification',
+      message: 'Ceci est un test de notification native pour vérifier que tout fonctionne correctement.',
+      priority: 'medium',
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      isDismissed: false
+    };
+
+    this.addNotification(testNotification);
+  }
+
+  // Test native notification directly
+  async testNativeNotification(): Promise<void> {
+    if (!this.isNativePlatform) {
+      console.log('Native notifications not supported on web platform');
+      alert('Notifications natives non supportées sur le web. Testez sur Android.');
+      return;
+    }
+
+    try {
+      // Use non-exact scheduling to avoid the warning
+      const scheduleTime = new Date(Date.now() + 1000);
+      
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: 'Test Notification Native',
+            body: 'Ceci est un test de notification native Android! Elle apparaît en dehors de l\'app comme Instagram et Facebook.',
+            id: Math.floor(Math.random() * 1000000), // Use smaller integer for Java compatibility
+            schedule: { 
+              at: scheduleTime,
+              repeats: false // Use non-exact scheduling
+            },
+            sound: 'default',
+            actionTypeId: 'OPEN_APP',
+            channelId: 'default'
+          }
+        ]
+      });
+      console.log('Native notification scheduled successfully for:', scheduleTime);
+    } catch (error) {
+      console.error('Error scheduling native notification:', error);
+      alert('Erreur lors de l\'envoi de la notification native: ' + error);
     }
   }
 
@@ -394,15 +410,6 @@ class NotificationService {
     this.saveNotifications();
   }
 
-  // Dismiss notification
-  dismissNotification(notificationId: string): void {
-    const notification = this.notifications.find(n => n.id === notificationId);
-    if (notification) {
-      notification.isDismissed = true;
-      this.saveNotifications();
-    }
-  }
-
   // Clear all notifications
   clearAllNotifications(): void {
     this.notifications = [];
@@ -422,49 +429,32 @@ class NotificationService {
 
   // Request notification permission
   async requestPermission(): Promise<boolean> {
+    if (!this.isNativePlatform) {
+      console.log('Push notifications not supported on web platform');
+      return false;
+    }
+
     try {
-      if ('Notification' in window) {
-        const BrowserNotification = (window as WindowWithWebkitAudio & { Notification: BrowserNotificationConstructor }).Notification;
-        
-        // Check current permission status
-        if (BrowserNotification.permission === 'granted') {
-          return true;
-        }
-        
-        if (BrowserNotification.permission === 'denied') {
-          console.log('Notification permission denied by user');
-          return false;
-        }
-        
-        // Request permission
-        console.log('Requesting notification permission...');
-        const permission = await BrowserNotification.requestPermission();
-        console.log('Permission result:', permission);
-        
-        if (permission === 'granted') {
-          // Update settings to enable push notifications
-          this.settings.pushNotifications = true;
-          this.saveSettings();
-          return true;
-        } else {
-          console.log('Permission not granted:', permission);
-          return false;
-        }
-      } else {
-        console.log('Notifications not supported in this browser');
-        return false;
+      const permission = await LocalNotifications.requestPermissions();
+      if (permission.display === 'granted') {
+        // Setup listeners and create channel after permission is granted
+        this.setupNotificationListeners();
+        this.createNotificationChannel();
       }
+      return permission.display === 'granted';
     } catch (error) {
       console.error('Error requesting notification permission:', error);
       return false;
     }
   }
 
-  // Check if notifications are supported
-  isSupported(): boolean {
-    return 'Notification' in window;
+  // Cleanup listeners when service is destroyed
+  destroy(): void {
+    if (this.isNativePlatform) {
+      LocalNotifications.removeAllListeners();
+    }
   }
 }
 
 // Export singleton instance
-export const notificationService = new NotificationService(); 
+export const nativeNotificationService = new NativeNotificationService();
