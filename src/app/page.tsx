@@ -9,7 +9,7 @@ import { SupermarketsPage } from "@/components/SupermarketsPage";
 import { OrdersPage } from "@/components/OrdersPage";
 import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { VirementsPage } from "@/components/VirementsPage";
-import { MobileDebugInfo } from "@/components/MobileDebugInfo";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -105,14 +105,17 @@ export default function HomePage() {
               <h1 className="text-2xl font-bold text-gray-800">
                 Tableau de Bord
               </h1>
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-full h-9 w-9 border-gray-200"
-                onClick={handleVirementsClick}
-              >
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              </Button>
+              <div className="flex items-center space-x-2">
+                <NotificationBell onNavigate={setActiveTab} />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full h-9 w-9 border-gray-200"
+                  onClick={handleVirementsClick}
+                >
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                </Button>
+              </div>
             </div>
 
             <DashboardOverview
@@ -219,9 +222,6 @@ export default function HomePage() {
       onToggleMobileMenu={() => setShowMobileMenu(!showMobileMenu)}
     >
       {renderContent()}
-
-      {/* Temporary debug info - remove after fixing mobile issues */}
-      <MobileDebugInfo />
     </DashboardLayout>
   );
 }

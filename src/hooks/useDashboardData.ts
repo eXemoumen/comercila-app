@@ -4,6 +4,8 @@ import {
     getCurrentStock,
     getFragranceStock,
 } from "@/utils/hybridStorage";
+import { notificationService } from "@/services/notificationService";
+import type { Sale } from "@/types/index";
 
 interface MonthlySalesData {
     quantity: number;
@@ -25,6 +27,8 @@ interface DashboardData {
     monthlySales: MonthlySalesData;
     salesData: Array<{ name: string; value: number }>;
     fragranceStock: Array<{ name: string; value: number; color: string }>;
+    sales: Sale[];
+    currentStock: number;
 }
 
 interface UseDashboardDataReturn {
@@ -64,6 +68,8 @@ export function useDashboardData(): UseDashboardDataReturn {
         },
         salesData: [],
         fragranceStock: [],
+        sales: [],
+        currentStock: 0,
     });
 
     const [monthlyBenefits, setMonthlyBenefits] = useState<Record<string, MonthlyData>>({});
@@ -89,6 +95,10 @@ export function useDashboardData(): UseDashboardDataReturn {
                 );
             });
 
+            // Get current stock
+            const currentStock = await getCurrentStock();
+            const fragmentStock = await getFragranceStock();
+
             // Calculate monthly statistics
             const totalQuantity = monthlySales.reduce(
                 (acc, sale) => acc + sale.quantity,
@@ -99,83 +109,78 @@ export function useDashboardData(): UseDashboardDataReturn {
                 0
             );
 
-            // Calculate profit based on the actual pricePerUnit from sales
-            const totalProfit = monthlySales.reduce((acc, sale) => {
-                // Determine benefit per unit based on sale price
-                const benefitPerUnit =
-                    sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-                return acc + sale.quantity * benefitPerUnit;
-            }, 0);
+            // Calculate total profit (revenue - supplier cost)
+            const totalSupplierPayment = monthlySales.reduce(
+                (acc, sale) => {
+                    // Calculate supplier cost based on pricePerUnit
+                    // If pricePerUnit is 180, supplier cost is 155
+                    // If pricePerUnit is 166, supplier cost is 149
+                    const supplierCostPerUnit = sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
+                    return acc + (supplierCostPerUnit * sale.quantity);
+                },
+                0
+            );
+            const totalProfit = totalRevenue - totalSupplierPayment;
 
-            // Calculate profit from paid sales only
-            const paidProfit = monthlySales.reduce((acc, sale) => {
-                if (sale.isPaid) {
-                    // Only include paid sales
-                    const benefitPerUnit =
-                        sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-                    return acc + sale.quantity * benefitPerUnit;
-                }
-                return acc;
-            }, 0);
-
-            // Calculate supplier payment amount
-            const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
-                // Determine supplier cost per unit based on sale price
-                const supplierCostPerUnit =
-                    sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
-                return acc + sale.quantity * supplierCostPerUnit;
-            }, 0);
-
-            const { currentStock, fragranceStock: fragmentStock } = await getCurrentStock();
+            // Calculate paid profit (only from paid sales)
+            const paidSales = monthlySales.filter((sale) => sale.isPaid);
+            const paidProfit = paidSales.reduce(
+                (acc, sale) => {
+                    const supplierCostPerUnit = sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
+                    return acc + (sale.totalValue - (supplierCostPerUnit * sale.quantity));
+                },
+                0
+            );
 
             // Get fragrance stock data for the pie chart
-            const fragranceStock = await getFragranceStock();
-            const fragranceData = fragranceStock.map((fragrance) => ({
+            const fragranceData = fragmentStock.map((fragrance) => ({
                 name: fragrance.name,
                 value: fragrance.quantity,
-                color: fragrance.color,
+                color: `hsl(${Math.random() * 360}, 70%, 50%)`,
             }));
 
-            // Get last 7 days sales data
-            const last7Days = Array.from({ length: 7 }, (_, i) => {
+            // Create sales trend data for the last 7 days
+            const salesData: Array<{ name: string; value: number }> = [];
+            for (let i = 6; i >= 0; i--) {
                 const date = new Date();
                 date.setDate(date.getDate() - i);
-                return date;
-            }).reverse();
-
-            const salesData = last7Days.map((date) => {
                 const daySales = allSales.filter((sale) => {
                     const saleDate = new Date(sale.date);
-                    return saleDate.toDateString() === date.toDateString();
+                    return (
+                        saleDate.getDate() === date.getDate() &&
+                        saleDate.getMonth() === date.getMonth() &&
+                        saleDate.getFullYear() === date.getFullYear()
+                    );
                 });
-
-                const totalValue = daySales.reduce(
+                const dayRevenue = daySales.reduce(
                     (acc, sale) => acc + sale.totalValue,
                     0
                 );
-
-                return {
+                salesData.push({
                     name: date.toLocaleDateString("fr-FR", { weekday: "short" }),
-                    value: totalValue,
-                };
-            });
+                    value: dayRevenue,
+                });
+            }
 
-            setDashboardData({
+            setDashboardData(prev => ({
+                ...prev,
                 monthlySales: {
                     quantity: totalQuantity,
                     revenue: totalRevenue,
                     profit: totalProfit,
-                    stock: currentStock * 9, // Convert cartons to units
+                    stock: currentStock.currentStock || 0,
                     supplierPayment: totalSupplierPayment,
                     paidProfit: paidProfit,
-                    fragmentStock: fragmentStock
+                    fragmentStock: fragmentStock.reduce((acc, f) => acc + f.quantity, 0),
                 },
                 salesData,
                 fragranceStock: fragranceData,
-            });
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load dashboard data");
-            console.error("Error updating dashboard data:", err);
+                sales: allSales,
+                currentStock: currentStock.currentStock || 0,
+            }));
+        } catch (error) {
+            console.error("Error updating dashboard data:", error);
+            setError("Erreur lors du chargement des données");
         }
     }, []);
 
@@ -252,6 +257,30 @@ export function useDashboardData(): UseDashboardDataReturn {
             window.removeEventListener("saleDataChanged", handleSaleDataChanged);
         };
     }, [updateDashboardData, calculateMonthlyBenefits, refreshData]);
+
+    // Generate notifications based on data
+    useEffect(() => {
+        if (dashboardData.sales && dashboardData.sales.length > 0) {
+            // Generate payment due notifications
+            notificationService.generatePaymentDueNotifications(dashboardData.sales);
+            
+            // Generate virement reminders
+            notificationService.generateVirementReminders(dashboardData.sales);
+        }
+    }, [dashboardData.sales]);
+
+    // Generate stock alerts
+    useEffect(() => {
+        if (dashboardData.currentStock) {
+            notificationService.generateStockAlerts(dashboardData.currentStock);
+        }
+    }, [dashboardData.currentStock]);
+
+    // Generate order notifications (if you have orders data)
+    useEffect(() => {
+        // You can add order notifications here when you have orders data
+        // notificationService.generateOrderNotifications(orders);
+    }, []);
 
     return {
         dashboardData,
