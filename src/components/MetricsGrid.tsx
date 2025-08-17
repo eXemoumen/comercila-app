@@ -27,7 +27,6 @@ export interface MetricsGridProps {
 export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
   function MetricsGrid({
     metrics,
-    maxStock = 2700,
     className = "",
     onProfitCardClick,
     onPaidProfitCardClick,
@@ -54,92 +53,20 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
       }
     }, [isMobile]);
 
-    // Calculate stock percentage
-    const stockPercentage = Math.round((metrics.stock / maxStock) * 100);
-    const stockColor =
-      stockPercentage > 80 ? "red" : stockPercentage > 60 ? "amber" : "green";
-
     console.log("🎨 MetricsGrid Rendering:", {
       isMobile,
-      stockPercentage,
-      stockColor,
       hasProfitClick: !!onProfitCardClick,
-      hasPaidProfitClick: !!onPaidProfitCardClick,
+      hasPaidProfitCardClick: !!onPaidProfitCardClick,
     });
 
     return (
       <div
         className={`grid gap-4 ${className} ${
-          isMobile ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-4"
+          isMobile ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3"
         }`}
       >
-        {/* Stock Card */}
-        <div className="order-1">
-          <MetricCard
-            title="Stock Actuel"
-            value={`${metrics.stock.toLocaleString("fr-DZ")} unités`}
-            color={stockColor}
-            icon={Package}
-            percentage={stockPercentage}
-            className="h-full"
-          >
-            <div className="mt-2 space-y-2">
-              {/* Stock Progress Bar */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>Capacité</span>
-                  <span>{stockPercentage}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      stockColor === "red"
-                        ? "bg-red-500"
-                        : stockColor === "amber"
-                        ? "bg-amber-500"
-                        : "bg-green-500"
-                    }`}
-                    style={{ width: `${stockPercentage}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Actuel: {metrics.stock.toLocaleString("fr-DZ")}</span>
-                  <span>Max: {maxStock.toLocaleString("fr-DZ")}</span>
-                </div>
-              </div>
-
-              {/* Stock Status */}
-              <div
-                className={`rounded-lg p-2 border ${
-                  stockColor === "red"
-                    ? "bg-red-50 border-red-200"
-                    : stockColor === "amber"
-                    ? "bg-amber-50 border-amber-200"
-                    : "bg-green-50 border-green-200"
-                }`}
-              >
-                <p
-                  className={`text-xs font-medium ${
-                    stockColor === "red"
-                      ? "text-red-700"
-                      : stockColor === "amber"
-                      ? "text-amber-700"
-                      : "text-green-700"
-                  }`}
-                >
-                  {stockColor === "red"
-                    ? "⚠️ Stock élevé"
-                    : stockColor === "amber"
-                    ? "⚡ Stock modéré"
-                    : "✅ Stock optimal"}
-                </p>
-              </div>
-            </div>
-          </MetricCard>
-        </div>
-
         {/* Revenue Card */}
-        <div className="order-2">
+        <div className="order-1">
           <MetricCard
             title="Chiffre d'Affaires"
             value={`${metrics.revenue.toLocaleString("fr-DZ")} DZD`}
@@ -175,7 +102,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
         </div>
 
         {/* Profit Card */}
-        <div className="order-3">
+        <div className="order-2">
           <ProfitMetricCard
             profit={metrics.profit}
             virementPeriod={metrics.virementPeriod}
@@ -184,7 +111,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
         </div>
 
         {/* Paid Profit Card */}
-        <div className="order-4">
+        <div className="order-3">
           <PaidProfitMetricCard
             paidProfit={metrics.paidProfit}
             totalProfit={metrics.profit}
@@ -194,7 +121,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
         </div>
 
         {/* Supplier Payment Card */}
-        <div className="order-5">
+        <div className="order-4">
           <MetricCard
             title="Paiement Fournisseur"
             value={`${metrics.supplierPayment.toLocaleString("fr-DZ")} DZD`}
@@ -230,7 +157,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
         </div>
 
         {/* Fragment Stock Card */}
-        <div className="order-6">
+        <div className="order-5">
           <MetricCard
             title="Stock Fragrances"
             value={`${metrics.fragmentStock.toLocaleString("fr-DZ")} unités`}

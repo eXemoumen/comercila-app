@@ -118,7 +118,7 @@ export const mobileUtils = {
     
     console.log('✅ Mobile optimizations applied');
   },
-
+    
   /**
    * Optimize touch interactions for better mobile UX
    */
@@ -143,7 +143,7 @@ export const mobileUtils = {
           element.classList.remove('touch-active');
         }, 150);
       });
-    };
+};
 
     // Apply to clickable elements
     document.querySelectorAll('.cursor-pointer, button, [role="button"]').forEach(addTouchFeedback);
@@ -266,7 +266,7 @@ export const mobileUtils = {
             modal.style.maxHeight = '90vh';
             modal.style.borderRadius = '16px';
             break;
-        }
+    }
       }
     });
   },
@@ -445,8 +445,8 @@ export function initializeMobileConfig() {
     
     console.log('📱 Mobile configuration initialized');
   }
-}
-
+      }
+      
 // Auto-initialize when module is imported
 if (typeof window !== 'undefined') {
   console.log('🌐 Window detected - initializing mobile config');

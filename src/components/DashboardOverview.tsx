@@ -2,7 +2,6 @@
 
 import React, { useCallback, useMemo, Suspense, useState } from "react";
 import { MetricsGrid, MonthlySalesData } from "./MetricsGrid";
-import { SalesChart } from "./SalesChart";
 import {
   MetricsErrorBoundary,
   ChartErrorBoundary,
@@ -168,20 +167,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
             Analyses et graphiques
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Sales Trend Chart */}
-            <ChartErrorBoundary title="Tendance des Ventes">
-              <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                <div className="p-4 border-b">
-                  <h3 className="text-sm font-medium text-gray-700">
-                    Tendance des Ventes (7 derniers jours)
-                  </h3>
-                </div>
-                <div className="p-4">
-                  <SalesChart data={dashboardData.salesData} height={200} />
-                </div>
-              </div>
-            </ChartErrorBoundary>
-
             {/* Monthly Benefits Chart */}
             <ChartErrorBoundary title="Bénéfices Mensuels">
               <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
