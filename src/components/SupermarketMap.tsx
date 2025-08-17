@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Supermarket } from "@/types";
+import { Supermarket } from "@/utils/storage";
 import dynamic from "next/dynamic";
 
 interface SupermarketMapProps {

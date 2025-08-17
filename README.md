@@ -1,4 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Comercila - Business Management Dashboard
+
+This is a comprehensive business management application built with [Next.js](https://nextjs.org) for supermarket operations, sales tracking, inventory management, and order processing.
+
+## Recent Refactoring (2025
+)
+
+The application has undergone a major refactoring to improve maintainability and code organization:
+
+### Key Improvements
+- **Main Dashboard Component**: Reduced from 3,600+ lines to under 200 lines
+- **Component Architecture**: Extracted reusable components following single responsibility principle
+- **Custom Hooks**: Created specialized hooks for state management and business logic
+- **Utility Functions**: Organized business logic into pure, testable functions
+- **Performance Optimizations**: Added React.memo, lazy loading, and code splitting
+- **Error Handling**: Implemented comprehensive error boundaries
+- **Testing**: Added extensive unit and integration tests
+
+### Architecture Overview
+```
+src/
+├── app/page.tsx              # Main dashboard (< 200 lines)
+├── components/               # Reusable UI components
+│   ├── DashboardLayout.tsx   # Main layout structure
+│   ├── DashboardOverview.tsx # Dashboard content orchestration
+│   ├── MetricsGrid.tsx       # Metrics display grid
+│   ├── *Chart.tsx           # Chart components
+│   └── *Page.tsx            # Individual page components
+├── hooks/                    # Custom React hooks
+│   ├── useDashboardData.ts   # Data fetching and management
+│   ├── useNavigation.ts      # Navigation state management
+│   └── useMigration.ts       # Migration handling
+└── utils/                    # Business logic utilities
+    ├── dashboardCalculations.ts # Profit and sales calculations
+    ├── dataTransformations.ts   # Data formatting utilities
+    ├── dateUtils.ts             # Date manipulation functions
+    └── businessLogic.ts         # Core business rules
+```
 
 ## Getting Started
 

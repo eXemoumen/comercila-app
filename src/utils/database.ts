@@ -25,7 +25,7 @@ const supabaseClient = createClient<Database>(supabaseUrl, supabaseAnonKey);
 // Helper function to check if we're online
 const isOnline = (): boolean => {
   // Always use local storage for now until Supabase is properly configured
-  return false; 
+  return false;
   // Original implementation:
   // return typeof window !== 'undefined' && window.navigator.onLine;
 };
@@ -50,10 +50,10 @@ export const syncWithSupabase = async () => {
     const { data: supermarkets, error: supermarketsError } = await supabaseClient
       .from('supermarkets')
       .select('*');
-    
+
     if (supermarketsError) throw supermarketsError;
     if (supermarkets) {
-      const localSupermarkets = storage.getSupermarkets();
+      const localSupermarkets = await storage.getSupermarkets();
       const mergedSupermarkets = [...supermarkets, ...localSupermarkets.filter(
         local => !supermarkets.find(remote => remote.id === local.id)
       )];
@@ -64,10 +64,10 @@ export const syncWithSupabase = async () => {
     const { data: sales, error: salesError } = await supabaseClient
       .from('sales')
       .select('*');
-    
+
     if (salesError) throw salesError;
     if (sales) {
-      const localSales = storage.getSales();
+      const localSales = await storage.getSales();
       const mergedSales = [...sales, ...localSales.filter(
         local => !sales.find(remote => remote.id === local.id)
       )];
@@ -78,10 +78,10 @@ export const syncWithSupabase = async () => {
     const { data: orders, error: ordersError } = await supabaseClient
       .from('orders')
       .select('*');
-    
+
     if (ordersError) throw ordersError;
     if (orders) {
-      const localOrders = storage.getOrders();
+      const localOrders = await storage.getOrders();
       const mergedOrders = [...orders, ...localOrders.filter(
         local => !orders.find(remote => remote.id === local.id)
       )];
@@ -135,7 +135,7 @@ interface SupermarketWithLocation extends Partial<Omit<Database['public']['Table
 export async function addSupermarket(supermarket: Omit<Database['public']['Tables']['supermarkets']['Insert'], 'id' | 'created_at'>): Promise<Database['public']['Tables']['supermarkets']['Row'] | null> {
   try {
     console.log('Attempting to add supermarket:', supermarket);
-    
+
     if (!isOnline()) {
       console.log('Offline mode - storing locally only');
       const newSupermarket = {
@@ -176,7 +176,7 @@ export async function addSupermarket(supermarket: Omit<Database['public']['Table
     // Also store locally
     storage.addSupermarket({
       ...data,
-      latitude: data.location?.lat, 
+      latitude: data.location?.lat,
       longitude: data.location?.lng
     });
 
@@ -221,7 +221,7 @@ export async function updateSupermarket(id: string, updatedData: SupermarketWith
     // Also update local storage
     const storageData: StorageSupermarketData = {
       ...updatedData,
-      latitude: updatedData.location?.lat, 
+      latitude: updatedData.location?.lat,
       longitude: updatedData.location?.lng
     };
     storage.updateSupermarket(id, storageData);
@@ -403,7 +403,7 @@ export const getCurrentStock = async (): Promise<number> => {
     if (!isOnline()) {
       // Sum up all fragrance stock quantities
       const fragranceStocks = JSON.parse(localStorage.getItem('soap_fragrance_stock') || '[]');
-      return fragranceStocks.reduce((total: number, item: { fragranceId: string; name: string; quantity: number; color: string }) => 
+      return fragranceStocks.reduce((total: number, item: { fragranceId: string; name: string; quantity: number; color: string }) =>
         total + (item.quantity || 0), 0);
     }
 
@@ -427,7 +427,7 @@ export const updateStock = async (productId: string, quantity: number, reason?: 
     // Update fragrance stock in local storage first
     const localStock = JSON.parse(localStorage.getItem('current_stock') || '[]')
     const existingStock = localStock.find((s: CurrentStock) => s.product_id === productId)
-    
+
     if (existingStock) {
       existingStock.quantity += quantity
       existingStock.updated_at = new Date().toISOString()
@@ -563,9 +563,9 @@ export const updateSalePayment = async (
   paymentDate?: string,
   paymentNote?: string
 ): Promise<void> => {
-  const sales = storage.getSales();
+  const sales = await storage.getSales();
   const saleIndex = sales.findIndex(s => s.id === saleId);
-  
+
   if (saleIndex !== -1) {
     const updatedSale = {
       ...sales[saleIndex],
@@ -573,7 +573,7 @@ export const updateSalePayment = async (
       paymentDate: isPaid ? paymentDate || new Date().toISOString() : undefined,
       paymentNote: isPaid ? paymentNote : undefined
     };
-    
+
     sales[saleIndex] = updatedSale;
     localStorage.setItem('soap_sales', JSON.stringify(sales));
 
@@ -751,8 +751,8 @@ export async function updateInventory(supermarketId: string, productId: string, 
     if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
 
     if (currentStock) {
-      const newQuantity = type === 'in' 
-        ? currentStock.quantity + quantity 
+      const newQuantity = type === 'in'
+        ? currentStock.quantity + quantity
         : currentStock.quantity - quantity;
 
       const { error: updateError } = await supabaseClient

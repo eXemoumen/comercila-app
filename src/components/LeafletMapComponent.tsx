@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Supermarket } from "@/types";
+import { Supermarket } from "@/utils/storage";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -53,13 +53,13 @@ export default function LeafletMapComponent({ supermarkets, userLocation }: Leaf
     // Add markers for supermarkets
     supermarkets.forEach(supermarket => {
       // Skip if location is missing or invalid
-      if (!supermarket.location?.lat || !supermarket.location?.lng) {
+      if (!supermarket.latitude || !supermarket.longitude) {
         console.log(`Skipping supermarket ${supermarket.name} - missing location data`);
         return;
       }
 
       try {
-        const marker = L.marker([supermarket.location.lat, supermarket.location.lng], {
+        const marker = L.marker([supermarket.latitude, supermarket.longitude], {
           icon: supermarketIcon
         })
           .bindPopup(`
@@ -71,7 +71,7 @@ export default function LeafletMapComponent({ supermarkets, userLocation }: Leaf
           .addTo(map);
 
         marker.on("click", () => {
-          const searchQuery = `${encodeURIComponent(supermarket.name)}@${supermarket.location.lat},${supermarket.location.lng}`;
+          const searchQuery = `${encodeURIComponent(supermarket.name)}@${supermarket.latitude},${supermarket.longitude}`;
           window.open(
             `https://www.google.com/maps/search/?api=1&query=${searchQuery}`,
             "_blank"
