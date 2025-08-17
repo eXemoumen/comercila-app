@@ -98,7 +98,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div
         className={`bg-white rounded-xl w-full h-full max-h-[95vh] overflow-hidden ${
-          isMobile ? "max-w-none" : "max-w-2xl"
+          isMobile ? "max-w-none mx-0" : "max-w-2xl"
         }`}
       >
         {/* Header */}

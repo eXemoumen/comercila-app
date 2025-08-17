@@ -10,6 +10,7 @@ import { OrdersPage } from "@/components/OrdersPage";
 import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { VirementsPage } from "@/components/VirementsPage";
 import { NotificationBell } from "@/components/NotificationBell";
+import { NotificationsPage } from "@/components/NotificationsPage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -161,6 +162,9 @@ export default function HomePage() {
 
       case "virements":
         return <VirementsPage onBack={handleBack} />;
+
+      case "notifications":
+        return <NotificationsPage onBack={handleBack} />;
 
       case "find-supermarkets":
         // Show the find supermarkets page instead of redirecting
