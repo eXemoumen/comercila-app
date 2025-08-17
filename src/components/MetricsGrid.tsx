@@ -24,35 +24,31 @@ export interface MetricsGridProps {
 export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
   function MetricsGrid({ metrics, maxStock = 2700, className = "" }) {
     return (
-      <div className={`space-y-4 ${className}`}>
-        {/* Primary Metrics - Most Important (Top Row) */}
-        <div className="grid grid-cols-2 gap-3">
-          <SalesMetricCard
-            quantity={metrics.quantity}
-            revenue={metrics.revenue}
-          />
-          <ProfitMetricCard profit={metrics.profit} />
-        </div>
+      <div className={`grid grid-cols-2 gap-4 ${className}`}>
+        <SalesMetricCard
+          quantity={metrics.quantity}
+          revenue={metrics.revenue}
+        />
 
-        {/* Secondary Metrics - Important but Secondary (Bottom Row) */}
-        <div className="grid grid-cols-3 gap-3">
-          <PaidProfitMetricCard
-            paidProfit={metrics.paidProfit}
-            totalProfit={metrics.profit}
-          />
-          <StockMetricCard
-            stock={metrics.stock}
-            fragmentStock={metrics.fragmentStock}
-            maxStock={maxStock}
-          />
-          <SupplierPaymentCard
-            supplierPayment={metrics.supplierPayment}
-            totalRevenue={metrics.revenue}
-          />
-        </div>
+        <ProfitMetricCard profit={metrics.profit} />
+
+        <PaidProfitMetricCard
+          paidProfit={metrics.paidProfit}
+          totalProfit={metrics.profit}
+        />
+
+        <StockMetricCard
+          stock={metrics.stock}
+          fragmentStock={metrics.fragmentStock}
+          maxStock={maxStock}
+        />
+
+        <SupplierPaymentCard
+          supplierPayment={metrics.supplierPayment}
+          totalRevenue={metrics.revenue}
+        />
       </div>
     );
   }
 );
-
 MetricsGrid.displayName = "MetricsGrid";

@@ -57,14 +57,13 @@
   }
 }
 
-/* Enhanced Mobile App Styles */
+/* Mobile-specific styles */
 .mobile-app {
   /* Prevent horizontal scrolling */
   overflow-x: hidden;
 
-  /* Improve touch targets and interactions */
+  /* Improve touch targets */
   touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
 
   /* Prevent text selection on buttons */
   -webkit-touch-callout: none;
@@ -73,88 +72,40 @@
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-
-  /* Smooth scrolling for better UX */
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
 }
 
-/* Enhanced Mobile Buttons */
+/* Mobile-optimized buttons */
 .mobile-app button {
   min-height: 44px;
   min-width: 44px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
 }
 
-.mobile-app button:active {
-  transform: scale(0.95);
-}
-
-/* Enhanced Mobile Inputs */
+/* Mobile-optimized inputs */
 .mobile-app input,
 .mobile-app textarea,
 .mobile-app select {
   font-size: 16px; /* Prevents zoom on iOS */
   min-height: 44px;
-  transition: all 0.2s ease;
 }
 
-.mobile-app input:focus,
-.mobile-app textarea:focus,
-.mobile-app select:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  transform: translateY(-1px);
-}
-
-/* Enhanced Mobile Cards */
+/* Mobile-optimized cards */
 .mobile-app .card {
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.mobile-app .card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
-}
-
-/* Enhanced Mobile Navigation */
+/* Mobile-optimized navigation */
 .mobile-app .nav-item {
-  padding: 16px 20px;
-  min-height: 56px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+  padding: 12px 16px;
+  min-height: 48px;
 }
 
-.mobile-app .nav-item::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: currentColor;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: -1;
-}
-
-.mobile-app .nav-item:active::before {
-  opacity: 0.1;
-}
-
-/* Enhanced Mobile Charts */
+/* Mobile-optimized charts */
 .mobile-app .recharts-wrapper {
   touch-action: pan-x pan-y;
-  user-select: none;
 }
 
-/* Enhanced Mobile Spacing */
+/* Mobile-specific spacing */
 @media (max-width: 768px) {
   .mobile-app .container {
     padding-left: 16px;
@@ -162,24 +113,15 @@
   }
 
   .mobile-app .space-y-4 > * + * {
-    margin-top: 20px;
+    margin-top: 16px;
   }
 
   .mobile-app .space-y-6 > * + * {
-    margin-top: 28px;
-  }
-
-  /* Better touch spacing for mobile */
-  .mobile-app button + button {
-    margin-left: 12px;
-  }
-
-  .mobile-app .card + .card {
-    margin-top: 20px;
+    margin-top: 24px;
   }
 }
 
-/* Enhanced Safe Area Support */
+/* Safe area for notched devices */
 @supports (padding: max(0px)) {
   .mobile-app {
     padding-left: max(16px, env(safe-area-inset-left));
@@ -188,23 +130,15 @@
   }
 }
 
-/* Enhanced Mobile Animations */
+/* Mobile-specific animations */
 .mobile-app .fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.mobile-app .slide-up {
-  animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.mobile-app .scale-in {
-  animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeIn 0.3s ease-in-out;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -212,141 +146,41 @@
   }
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Enhanced Mobile Modals */
+/* Mobile-optimized modals */
 .mobile-app .modal {
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0;
   max-height: 90vh;
   overflow-y: auto;
-  backdrop-filter: blur(20px);
 }
 
-/* Enhanced Mobile Loading States */
+/* Mobile-specific loading states */
 .mobile-app .loading {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  flex-direction: column;
 }
 
-.mobile-app .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(59, 130, 246, 0.1);
-  border-top: 3px solid rgb(59, 130, 246);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-/* Enhanced Mobile Tables */
+/* Mobile-optimized tables */
 .mobile-app table {
   font-size: 14px;
-  border-collapse: separate;
-  border-spacing: 0;
 }
 
 .mobile-app th,
 .mobile-app td {
-  padding: 12px 8px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 8px 4px;
 }
 
-.mobile-app th {
-  background: rgba(0, 0, 0, 0.02);
-  font-weight: 600;
-  text-align: left;
-}
-
-/* Enhanced Mobile Scrollbars */
+/* Mobile-specific scrollbars */
 .mobile-app ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
 }
 
 .mobile-app ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 3px;
+  background: transparent;
 }
 
 .mobile-app ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-  transition: background 0.2s ease;
-}
-
-.mobile-app ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-/* Enhanced Mobile Focus States */
-.mobile-app button:focus-visible,
-.mobile-app input:focus-visible,
-.mobile-app select:focus-visible {
-  outline: 2px solid rgb(59, 130, 246);
-  outline-offset: 2px;
-}
-
-/* Enhanced Mobile Hover Effects */
-@media (hover: hover) {
-  .mobile-app .card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-  }
-
-  .mobile-app button:hover {
-    transform: translateY(-1px);
-  }
-}
-
-/* Enhanced Mobile Transitions */
-.mobile-app * {
-  transition-property: color, background-color, border-color,
-    text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter,
-    backdrop-filter;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 200ms;
-}
-
-/* Enhanced Mobile Selection */
-.mobile-app ::selection {
-  background: rgba(59, 130, 246, 0.2);
-  color: inherit;
-}
-
-/* Enhanced Mobile Print Styles */
-@media print {
-  .mobile-app .no-print {
-    display: none !important;
-  }
+  border-radius: 2px;
 }

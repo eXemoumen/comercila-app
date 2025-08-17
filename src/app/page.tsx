@@ -11,15 +11,8 @@ import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { VirementsPage } from "@/components/VirementsPage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
-import {
-  AlertCircle,
-  ChevronLeft,
-  Plus,
-  Package,
-  Store,
-  DollarSign,
-  Calendar,
-} from "lucide-react";
+import { AlertCircle } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 export default function HomePage() {
   const { dashboardData, monthlyBenefits, isLoading, error } =
@@ -107,79 +100,20 @@ export default function HomePage() {
       case "dashboard":
         return (
           <div className="space-y-6 pb-20">
-            {/* Enhanced Header with Quick Actions */}
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-800">
-                    Tableau de Bord
-                  </h1>
-                  <p className="text-sm text-gray-600">
-                    Vue d&apos;ensemble de vos activités
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full h-10 w-10 border-gray-200 hover:border-red-300 hover:bg-red-50"
-                  onClick={handleVirementsClick}
-                >
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                </Button>
-              </div>
-
-              {/* Quick Action Buttons - Most Important Actions First */}
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  onClick={() => setActiveTab("add-sale")}
-                  className="h-12 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  Nouvelle Vente
-                </Button>
-                <Button
-                  onClick={() => setActiveTab("stock")}
-                  variant="outline"
-                  className="h-12 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
-                >
-                  <Package className="h-5 w-5 mr-2" />
-                  Gérer Stock
-                </Button>
-              </div>
-
-              {/* Secondary Quick Actions */}
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                <Button
-                  onClick={() => setActiveTab("supermarkets")}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 text-gray-600 hover:text-gray-800 hover:bg-gray-100"
-                >
-                  <Store className="h-4 w-4 mr-1" />
-                  Marchés
-                </Button>
-                <Button
-                  onClick={() => setActiveTab("orders")}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 text-gray-600 hover:text-gray-800 hover:bg-gray-100"
-                >
-                  <Calendar className="h-4 w-4 mr-1" />
-                  Commandes
-                </Button>
-                <Button
-                  onClick={() => setActiveTab("virements")}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 text-gray-600 hover:text-gray-800 hover:bg-gray-100"
-                >
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Virements
-                </Button>
-              </div>
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-2xl font-bold text-gray-800">
+                Tableau de Bord
+              </h1>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full h-9 w-9 border-gray-200"
+                onClick={handleVirementsClick}
+              >
+                <AlertCircle className="h-5 w-5 text-red-500" />
+              </Button>
             </div>
 
-            {/* Main Dashboard Content */}
             <DashboardOverview
               dashboardData={dashboardData}
               monthlyBenefits={monthlyBenefits}
@@ -228,72 +162,49 @@ export default function HomePage() {
         // Show the find supermarkets page instead of redirecting
         return (
           <div className="space-y-6 pb-20">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-800">
-                    Trouver Supermarchés
-                  </h1>
-                  <p className="text-sm text-gray-600">
-                    Localisez les marchés à proximité
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full h-10 w-10 border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                  onClick={handleBack}
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </Button>
-              </div>
-
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Store className="h-8 w-8 text-gray-400" />
-                </div>
-                <p className="text-lg text-gray-600 mb-2">
-                  Fonctionnalité en cours de développement
-                </p>
-                <p className="text-sm text-gray-500">
-                  Bientôt disponible pour localiser les supermarchés
-                </p>
-              </div>
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-2xl font-bold text-gray-800">
+                Trouver Supermarchés
+              </h1>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full h-9 w-9 border-gray-200"
+                onClick={handleBack}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
             </div>
+            <p className="text-lg text-gray-800">
+              Page de recherche de supermarchés.
+            </p>
           </div>
         );
 
       default:
         return (
           <div className="space-y-6 pb-20">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-800">
-                    Tableau de Bord
-                  </h1>
-                  <p className="text-sm text-gray-600">
-                    Vue d&apos;ensemble de vos activités
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full h-10 w-10 border-gray-200 hover:border-red-300 hover:bg-red-50"
-                  onClick={handleVirementsClick}
-                >
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                </Button>
-              </div>
-
-              <DashboardOverview
-                dashboardData={dashboardData}
-                monthlyBenefits={monthlyBenefits}
-                onNavigate={setActiveTab}
-                isLoading={isLoading}
-                error={error}
-              />
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-2xl font-bold text-gray-800">
+                Tableau de Bord
+              </h1>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full h-9 w-9 border-gray-200"
+                onClick={handleVirementsClick}
+              >
+                <AlertCircle className="h-5 w-5 text-red-500" />
+              </Button>
             </div>
+
+            <DashboardOverview
+              dashboardData={dashboardData}
+              monthlyBenefits={monthlyBenefits}
+              onNavigate={setActiveTab}
+              isLoading={isLoading}
+              error={error}
+            />
           </div>
         );
     }
