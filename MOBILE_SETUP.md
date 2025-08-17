@@ -38,7 +38,7 @@ npm run open:ios
 ## Available Scripts
 
 - `npm run build:mobile` - Build the web app and sync with Capacitor
-- `npm run android` - Build and run on Android device/emulator
+- `image.png` - Build and run on Android device/emulator
 - `npm run ios` - Build and run on iOS device/simulator (macOS only)
 - `npm run open:android` - Open Android project in Android Studio
 - `npm run open:ios` - Open iOS project in Xcode

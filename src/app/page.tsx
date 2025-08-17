@@ -9,10 +9,14 @@ import { SupermarketsPage } from "@/components/SupermarketsPage";
 import { OrdersPage } from "@/components/OrdersPage";
 import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { VirementsPage } from "@/components/VirementsPage";
+import { NotificationBell } from "@/components/NotificationBell";
+import { NotificationsPage } from "@/components/NotificationsPage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import { ChevronLeft } from "lucide-react";
+import { SettingsPage } from "@/components/SettingsPage";
+import { Settings } from "lucide-react";
 
 export default function HomePage() {
   const { dashboardData, monthlyBenefits, isLoading, error } =
@@ -104,14 +108,29 @@ export default function HomePage() {
               <h1 className="text-2xl font-bold text-gray-800">
                 Tableau de Bord
               </h1>
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-full h-9 w-9 border-gray-200"
-                onClick={handleVirementsClick}
-              >
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              </Button>
+              <div className="flex items-center space-x-2">
+                <NotificationBell onNavigate={setActiveTab} />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setActiveTab("settings")}
+                  className="text-gray-600 hover:text-gray-900"
+                  style={{
+                    minHeight: "44px",
+                    minWidth: "44px",
+                  }}
+                >
+                  <Settings className="h-5 w-5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full h-9 w-9 border-gray-200"
+                  onClick={handleVirementsClick}
+                >
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                </Button>
+              </div>
             </div>
 
             <DashboardOverview
@@ -157,6 +176,21 @@ export default function HomePage() {
 
       case "virements":
         return <VirementsPage onBack={handleBack} />;
+
+      case "notifications":
+        return (
+          <NotificationsPage
+            onBack={() => setActiveTab("dashboard")}
+            onNavigate={setActiveTab}
+          />
+        );
+      case "settings":
+        return (
+          <SettingsPage
+            onBack={() => setActiveTab("dashboard")}
+            onNavigate={setActiveTab}
+          />
+        );
 
       case "find-supermarkets":
         // Show the find supermarkets page instead of redirecting

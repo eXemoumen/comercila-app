@@ -1,452 +1,656 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle, ChevronLeft, Plus, X, Check } from "lucide-react";
-import type { Sale, Payment } from "@/types/index";
-import { addPayment, getSales, getSupermarkets } from "@/utils/hybridStorage";
-import { supabase } from "@/lib/supabase";
+import React, { useState, useEffect, useCallback } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import {
+  ChevronLeft,
+  Plus,
+  DollarSign,
+  Calendar,
+  TrendingUp,
+  Info,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { getSales, getSupermarkets, addPayment } from "@/utils/hybridStorage";
+import {
+  calculateVirementPeriod,
+  calculateSupplierReturn,
+} from "@/utils/virementCalculations";
 import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
+import type { Sale } from "@/types/index";
+import type { Supermarket } from "@/utils/storage";
 
 interface VirementsPageProps {
   onBack: () => void;
 }
 
-export function VirementsPage({ onBack }: VirementsPageProps) {
-  const [pendingSales, setPendingSales] = useState<Sale[]>([]);
-  const [supermarkets, setSupermarkets] = useState<
-    { id: string; name: string }[]
-  >([]);
+interface VirementStatus {
+  totalUnpaid: number;
+  totalPaid: number;
+  oldestUnpaidDate: string | null;
+  virementPeriod: string;
+  canReturnToSupplier: boolean;
+  supplierReturnAmount: number;
+}
+
+export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
+  const [virementStatus, setVirementStatus] = useState<VirementStatus>({
+    totalUnpaid: 0,
+    totalPaid: 0,
+    oldestUnpaidDate: null,
+    virementPeriod: "",
+    canReturnToSupplier: false,
+    supplierReturnAmount: 0,
+  });
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({
+    summary: true,
+    pendingPayments: true,
+    addPayment: false,
+  });
 
-  // Android-specific initialization
+  // Check if mobile and apply Android optimizations
   useEffect(() => {
-    if (isAndroid()) {
-      console.log("🤖 Android detected - applying optimizations");
-      mobileUtils.optimizeForVirements();
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
 
-      // Check network status on Android
-      mobileUtils.checkNetworkStatus().then((connected) => {
-        setIsOnline(connected);
-        console.log("🌐 Android network status:", connected);
-      });
+      if (isAndroid() && mobile) {
+        console.log("🤖 Android mobile detected - applying optimizations");
+        mobileUtils.optimizeForVirements();
+      }
+    };
 
-      // Add network listener for Android
-      mobileUtils.addNetworkListener((connected) => {
-        setIsOnline(connected);
-        console.log("🌐 Android network status changed:", connected);
-      });
-    }
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  const createSampleData = async () => {
-    try {
-      console.log("🔄 Creating sample data in Supabase...");
+  const calculateVirementStatus = useCallback((sales: Sale[]) => {
+    const virementInfo = calculateVirementPeriod(sales);
+    const supplierInfo = calculateSupplierReturn(sales);
 
-      // First, create a sample supermarket
-      const { data: supermarket, error: supermarketError } = await supabase
-        .from("supermarkets")
-        .insert([
-          {
-            name: "Supermarket Test",
-            address: "123 Test Street, Algiers",
-            latitude: 36.7538,
-            longitude: 3.0588,
-          },
-        ])
-        .select()
-        .single();
-
-      if (supermarketError) {
-        console.error("❌ Error creating supermarket:", supermarketError);
-        return;
-      }
-
-      console.log("✅ Sample supermarket created:", supermarket);
-
-      // Then, create a sample unpaid sale
-      const { data: sale, error: saleError } = await supabase
-        .from("sales")
-        .insert([
-          {
-            id: Date.now().toString(),
-            supermarket_id: supermarket.id,
-            date: new Date().toISOString(),
-            quantity: 10,
-            cartons: 2,
-            price_per_unit: 1500,
-            total_value: 15000,
-            is_paid: false,
-            remaining_amount: 15000,
-            note: "Sample unpaid sale for testing",
-          },
-        ])
-        .select()
-        .single();
-
-      if (saleError) {
-        console.error("❌ Error creating sale:", saleError);
-        return;
-      }
-
-      console.log("✅ Sample sale created:", sale);
-
-      // Reload the data
-      const loadData = async () => {
-        const allSales = await getSales();
-        const unpaidSales = allSales.filter((sale) => !sale.isPaid);
-        setPendingSales(unpaidSales);
-
-        const allSupermarkets = await getSupermarkets();
-        setSupermarkets(allSupermarkets);
-      };
-
-      await loadData();
-    } catch (error) {
-      console.error("Error creating sample data:", error);
-    }
-  };
+    return {
+      totalUnpaid: supplierInfo.totalUnpaid,
+      totalPaid: supplierInfo.totalPaid,
+      oldestUnpaidDate: virementInfo.oldestDate,
+      virementPeriod: virementInfo.period,
+      canReturnToSupplier: supplierInfo.canReturnToSupplier,
+      supplierReturnAmount: supplierInfo.supplierReturnAmount,
+    };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        console.log("🔄 Loading virements data from Supabase...");
+        const [salesData, supermarketsData] = await Promise.all([
+          getSales(),
+          getSupermarkets(),
+        ]);
 
-        // Test Supabase connection first
-        console.log("🔍 Testing Supabase connection...");
-        const { error: testError } = await supabase
-          .from("sales")
-          .select("count")
-          .limit(1);
+        setSales(salesData);
+        setSupermarkets(supermarketsData);
 
-        if (testError) {
-          console.error("❌ Supabase connection error:", testError);
-        } else {
-          console.log("✅ Supabase connection successful");
-        }
-
-        // Use hybrid storage functions (which use Supabase)
-        const allSales = await getSales();
-        console.log(
-          "📊 Sales loaded from Supabase:",
-          allSales.length,
-          "records"
-        );
-        console.log(
-          "📊 Sales data details:",
-          allSales.map((sale) => ({
-            id: sale.id,
-            supermarketId: sale.supermarketId,
-            totalValue: sale.totalValue,
-            isPaid: sale.isPaid,
-            remainingAmount: sale.remainingAmount,
-            date: sale.date,
-          }))
-        );
-
-        const unpaidSales = allSales.filter((sale) => !sale.isPaid);
-        console.log(
-          "💰 Unpaid sales (virements):",
-          unpaidSales.length,
-          "records"
-        );
-
-        // If no data exists, offer to create sample data
-        if (allSales.length === 0) {
-          console.log(
-            "📝 No sales data found. You can create sample data for testing."
-          );
-        }
-
-        setPendingSales(unpaidSales);
-
-        const allSupermarkets = await getSupermarkets();
-        console.log(
-          "🏪 Supermarkets loaded from Supabase:",
-          allSupermarkets.length,
-          "records"
-        );
-        console.log(
-          "🏪 Supermarkets details:",
-          allSupermarkets.map((sm) => ({
-            id: sm.id,
-            name: sm.name,
-            address: sm.address,
-          }))
-        );
-
-        setSupermarkets(allSupermarkets);
-
-        setIsLoading(false);
+        const status = calculateVirementStatus(salesData);
+        setVirementStatus(status);
       } catch (error) {
-        console.error("Error loading virements data from Supabase:", error);
-        setPendingSales([]);
-        setSupermarkets([]);
+        console.error("Error loading data:", error);
+      } finally {
         setIsLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [calculateVirementStatus]);
 
-  // Calculate total remaining amount safely
-  const totalRemaining = pendingSales.reduce((total, sale) => {
-    return total + (sale.remainingAmount || 0);
-  }, 0);
+  const getSupermarketName = (supermarketId: string) => {
+    const supermarket = supermarkets.find((s) => s.id === supermarketId);
+    return supermarket?.name || `Supermarket ${supermarketId.slice(-4)}`;
+  };
 
-  const handlePayment = async () => {
-    if (!selectedSale || paymentAmount <= 0) return;
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("fr-DZ", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const handleAddPayment = async () => {
+    if (!selectedSale || !paymentAmount) return;
+
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) return;
 
     try {
-      const payment: Omit<Payment, "id"> = {
-        amount: paymentAmount,
+      await addPayment(selectedSale.id, {
         date: new Date().toISOString(),
+        amount: amount,
         note: paymentNote,
-      };
+      });
 
-      await addPayment(selectedSale.id, payment);
-      console.log("✅ Payment added successfully");
+      // Reload sales data
+      const updatedSales = await getSales();
+      setSales(updatedSales);
 
-      // Refresh data
-      const allSales = await getSales();
-      const unpaidSales = allSales.filter((sale) => !sale.isPaid);
-      setPendingSales(unpaidSales);
+      // Update virement status
+      const status = calculateVirementStatus(updatedSales);
+      setVirementStatus(status);
 
       // Reset form
       setSelectedSale(null);
-      setPaymentAmount(0);
+      setPaymentAmount("");
       setPaymentNote("");
-      setShowPaymentModal(false);
+
+      console.log("✅ Payment added successfully");
     } catch (error) {
       console.error("Error adding payment:", error);
     }
   };
 
-  const getSupermarketName = (supermarketId: string) => {
-    const supermarket = supermarkets.find((s) => s.id === supermarketId);
-    return supermarket?.name || "Unknown Supermarket";
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
   };
 
-  return (
-    <div className="space-y-4 pb-20">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" onClick={onBack} className="mr-1">
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-bold text-gray-800">
-            Paiements en Attente
-          </h1>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center space-x-4 mb-6">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+              className="rounded-full"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-2xl font-bold text-gray-800">
+              Paiements en Attente (Virements)
+            </h1>
+          </div>
+
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full border-b-2 border-blue-600 h-12 w-12"></div>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">
-          <div className="animate-spin rounded-full border-b-2 border-blue-600 h-8 w-8 mx-auto mb-2"></div>
-          <p>Chargement des données...</p>
-          {isAndroid() && (
-            <p className="text-xs mt-2">
-              {isOnline ? "🟢 Connecté" : "🔴 Hors ligne"}
-            </p>
-          )}
+  // Filter pending payments (sales with remaining amounts)
+  const pendingPayments = sales.filter((sale) => sale.remainingAmount > 0);
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center space-x-4 mb-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="rounded-full"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Paiements en Attente (Virements)
+          </h1>
         </div>
-      )}
 
-      {/* Network Status for Android */}
-      {isAndroid() && !isLoading && (
+        {/* Summary Cards - Mobile Optimized */}
         <div
-          className={`text-center py-2 rounded-lg mb-4 ${
-            isOnline ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          className={`grid gap-4 mb-6 ${
+            isMobile ? "grid-cols-1" : "grid-cols-3"
           }`}
         >
-          <p className="text-sm font-medium">
-            {isOnline
-              ? "🟢 Connecté à Supabase"
-              : "🔴 Hors ligne - Mode hors ligne"}
-          </p>
-        </div>
-      )}
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center space-x-2 text-blue-800">
+                <DollarSign className="h-5 w-5" />
+                <span className="text-lg">Total à recevoir</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-blue-900">
+                {virementStatus.totalUnpaid.toLocaleString("fr-DZ")} DZD
+              </p>
+              <p className="text-sm text-blue-700 mt-1">
+                {pendingPayments.length} vente(s) en attente
+              </p>
+            </CardContent>
+          </Card>
 
-      {/* Summary Card */}
-      {!isLoading && (
-        <Card className="border-none shadow-md rounded-xl overflow-hidden mb-4">
-          <CardContent className="p-5">
-            <div className="flex items-center">
-              <div className="bg-red-100 rounded-full p-3 mr-4">
-                <AlertCircle className="h-6 w-6 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Total à recevoir</p>
-                <div className="text-2xl font-bold text-gray-800">
-                  {totalRemaining.toLocaleString("fr-DZ")} DZD
+          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center space-x-2 text-green-800">
+                <TrendingUp className="h-5 w-5" />
+                <span className="text-lg">Progression des virements</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-900">
+                {virementStatus.totalPaid.toLocaleString("fr-DZ")} DZD
+              </p>
+              <p className="text-sm text-green-700 mt-1">Total déjà payé</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center space-x-2 text-amber-800">
+                <Calendar className="h-5 w-5" />
+                <span className="text-lg">Période des virements</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-amber-900">
+                {virementStatus.virementPeriod}
+              </p>
+              <p className="text-sm text-amber-700 mt-1">
+                {virementStatus.oldestUnpaidDate && (
+                  <>Depuis: {formatDate(virementStatus.oldestUnpaidDate)}</>
+                )}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Supplier Return Status - Collapsible */}
+        {virementStatus.canReturnToSupplier && (
+          <Card className="mb-6 bg-gradient-to-r from-green-50 to-green-100 border-green-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center space-x-2 text-green-800">
+                <Info className="h-5 w-5" />
+                <span className="text-lg">Statut de Retour au Fournisseur</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <p className="text-green-700">
+                  ✅ <strong>Prêt pour retour au fournisseur!</strong> Tous les
+                  virements sont terminés.
+                </p>
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <p className="text-sm text-green-800">
+                    <strong>Montant à retourner:</strong>{" "}
+                    {virementStatus.supplierReturnAmount.toLocaleString(
+                      "fr-DZ"
+                    )}{" "}
+                    DZD
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    Ce montant peut être retourné au fournisseur car toutes les
+                    ventes sont payées.
+                  </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Virement Period Info - Collapsible */}
+        <Card className="mb-6 bg-gradient-to-r from-blue-50 to-blue-100 border-blue-300">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center space-x-2 text-blue-800">
+              <Info className="h-5 w-5" />
+              <span className="text-lg">
+                Informations sur la Période des Virements
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <p className="text-blue-700">
+                📅 <strong>Période calculée:</strong>{" "}
+                {virementStatus.virementPeriod}
+              </p>
+              {virementStatus.oldestUnpaidDate && (
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    <strong>Date la plus ancienne non payée:</strong>{" "}
+                    {formatDate(virementStatus.oldestUnpaidDate)}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Cette date détermine la période utilisée pour calculer les
+                    bénéfices du tableau de bord.
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Pending Payments List */}
-      {!isLoading && (
-        <div className="space-y-3">
-          {pendingSales.length === 0 ? (
-            <Card className="border-none shadow-md rounded-xl overflow-hidden">
-              <CardContent className="p-6 text-center">
-                <div className="bg-green-100 rounded-full p-3 mx-auto mb-3 w-fit">
-                  <Check className="h-6 w-6 text-green-600" />
+        {/* Pending Payments Section - Collapsible */}
+        <Card className="mb-6">
+          <CardHeader
+            className="cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => toggleSection("pendingPayments")}
+          >
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Paiements en Attente</CardTitle>
+              {expandedSections.pendingPayments ? (
+                <ChevronUp className="h-5 w-5 text-gray-600" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-gray-600" />
+              )}
+            </div>
+          </CardHeader>
+
+          {expandedSections.pendingPayments && (
+            <CardContent>
+              {pendingPayments.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-lg">Aucun paiement en attente</p>
+                  <p className="text-sm">Toutes les ventes sont payées!</p>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  Aucun paiement en attente
-                </h3>
-                <p className="text-gray-500 mb-4">
-                  Tous les paiements ont été effectués avec succès.
-                </p>
-                <Button
-                  onClick={createSampleData}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Créer des données de test
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            pendingSales.map((sale) => (
-              <Card
-                key={sale.id}
-                className="border-none shadow-md rounded-xl overflow-hidden hover:shadow-lg transition-shadow"
-              >
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-gray-800">
-                        {getSupermarketName(sale.supermarketId)}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        {new Date(sale.date).toLocaleDateString("fr-DZ")}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-gray-800">
-                        {sale.remainingAmount?.toLocaleString("fr-DZ")} DZD
-                      </p>
-                      <p className="text-sm text-gray-500">Restant à payer</p>
-                    </div>
-                  </div>
+              ) : (
+                <div className="space-y-4">
+                  {isMobile ? (
+                    // Mobile-friendly card layout
+                    pendingPayments.map((sale) => (
+                      <div
+                        key={sale.id}
+                        className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+                      >
+                        <div className="space-y-3">
+                          {/* Header */}
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-semibold text-gray-800">
+                                {getSupermarketName(sale.supermarketId)}
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Vente du {formatDate(sale.date)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-bold text-red-600">
+                                {sale.remainingAmount.toLocaleString("fr-DZ")}{" "}
+                                DZD
+                              </p>
+                              <p className="text-xs text-gray-600">Restant</p>
+                            </div>
+                          </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-600">
-                      <p>
-                        Total: {sale.totalValue?.toLocaleString("fr-DZ")} DZD
-                      </p>
-                      <p>
-                        Payé:{" "}
-                        {(
-                          sale.totalValue - (sale.remainingAmount || 0)
-                        ).toLocaleString("fr-DZ")}{" "}
-                        DZD
-                      </p>
+                          {/* Sale Details */}
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-gray-600">
+                                Quantité: {sale.quantity}
+                              </p>
+                              <p className="text-gray-600">
+                                Prix/Unité: {sale.pricePerUnit} DZD
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">
+                                Total: {sale.totalValue.toLocaleString("fr-DZ")}{" "}
+                                DZD
+                              </p>
+                              <p className="text-gray-600">
+                                Paiements: {sale.payments.length}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Payment Progress */}
+                          <div className="bg-white rounded p-3 border border-gray-200">
+                            <div className="flex justify-between text-xs text-gray-600 mb-1">
+                              <span>Progression</span>
+                              <span>
+                                {Math.round(
+                                  ((sale.totalValue - sale.remainingAmount) /
+                                    sale.totalValue) *
+                                    100
+                                )}
+                                %
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${
+                                    ((sale.totalValue - sale.remainingAmount) /
+                                      sale.totalValue) *
+                                    100
+                                  }%`,
+                                }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between text-xs text-gray-500 mt-1">
+                              <span>
+                                Payé:{" "}
+                                {(
+                                  sale.totalValue - sale.remainingAmount
+                                ).toLocaleString("fr-DZ")}{" "}
+                                DZD
+                              </span>
+                              <span>
+                                Restant:{" "}
+                                {sale.remainingAmount.toLocaleString("fr-DZ")}{" "}
+                                DZD
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Action Button */}
+                          <Button
+                            onClick={() => setSelectedSale(sale)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Ajouter un Paiement
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    // Desktop table layout
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Supermarché
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Date
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Quantité
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Total (DZD)
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Restant (DZD)
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Paiements
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Action
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {pendingPayments.map((sale) => (
+                            <tr key={sale.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {getSupermarketName(sale.supermarketId)}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {formatDate(sale.date)}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {sale.quantity}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {sale.totalValue.toLocaleString("fr-DZ")}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-red-600">
+                                  {sale.remainingAmount.toLocaleString("fr-DZ")}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {sale.payments.length}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Button
+                                  onClick={() => setSelectedSale(sale)}
+                                  size="sm"
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Paiement
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                    <Button
-                      onClick={() => {
-                        setSelectedSale(sale);
-                        setPaymentAmount(sale.remainingAmount || 0);
-                        setShowPaymentModal(true);
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter Paiement
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+                  )}
+                </div>
+              )}
+            </CardContent>
           )}
-        </div>
-      )}
+        </Card>
 
-      {/* Payment Modal */}
-      {showPaymentModal && selectedSale && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">
-                Ajouter un Paiement
-              </h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowPaymentModal(false)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
+        {/* Add Payment Section - Collapsible */}
+        <Card>
+          <CardHeader
+            className="cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => toggleSection("addPayment")}
+          >
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Ajouter un Paiement</CardTitle>
+              {expandedSections.addPayment ? (
+                <ChevronUp className="h-5 w-5 text-gray-600" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-gray-600" />
+              )}
             </div>
+          </CardHeader>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Supermarché
-                </label>
-                <p className="text-gray-800 font-medium">
-                  {getSupermarketName(selectedSale.supermarketId)}
-                </p>
-              </div>
+          {expandedSections.addPayment && (
+            <CardContent>
+              {!selectedSale ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-lg">Sélectionnez une vente ci-dessus</p>
+                  <p className="text-sm">pour ajouter un paiement</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <h4 className="font-semibold text-blue-800 mb-2">
+                      Vente sélectionnée
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-blue-700">
+                          <strong>Supermarché:</strong>{" "}
+                          {getSupermarketName(selectedSale.supermarketId)}
+                        </p>
+                        <p className="text-blue-700">
+                          <strong>Date:</strong> {formatDate(selectedSale.date)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-blue-700">
+                          <strong>Restant:</strong>{" "}
+                          {selectedSale.remainingAmount.toLocaleString("fr-DZ")}{" "}
+                          DZD
+                        </p>
+                        <p className="text-blue-700">
+                          <strong>Paiements:</strong>{" "}
+                          {selectedSale.payments.length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Montant du Paiement (DZD)
-                </label>
-                <input
-                  type="number"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0"
-                  min="0"
-                  max={selectedSale.remainingAmount || 0}
-                />
-              </div>
+                  <div className="grid gap-4">
+                    <div>
+                      <div className="text-sm font-medium text-gray-700 mb-1">
+                        Montant du Paiement (DZD)
+                      </div>
+                      <Input
+                        id="paymentAmount"
+                        type="number"
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        placeholder="Entrez le montant"
+                        className="mt-1"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Note (optionnel)
-                </label>
-                <textarea
-                  value={paymentNote}
-                  onChange={(e) => setPaymentNote(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Note sur le paiement..."
-                  rows={3}
-                />
-              </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-700 mb-1">
+                        Note (optionnel)
+                      </div>
+                      <Input
+                        id="paymentNote"
+                        value={paymentNote}
+                        onChange={(e) => setPaymentNote(e.target.value)}
+                        placeholder="Note sur le paiement"
+                        className="mt-1"
+                      />
+                    </div>
 
-              <div className="flex space-x-3 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowPaymentModal(false)}
-                  className="flex-1"
-                >
-                  Annuler
-                </Button>
-                <Button
-                  onClick={handlePayment}
-                  disabled={paymentAmount <= 0}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Confirmer
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                    <div className="flex space-x-3">
+                      <Button
+                        onClick={handleAddPayment}
+                        disabled={
+                          !paymentAmount || parseFloat(paymentAmount) <= 0
+                        }
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Ajouter le Paiement
+                      </Button>
+
+                      <Button
+                        onClick={() => setSelectedSale(null)}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      </div>
     </div>
   );
-}
+};
