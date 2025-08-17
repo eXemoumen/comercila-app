@@ -18,3 +18,5 @@ export { ProfitMetricCard } from "./ProfitMetricCard";
 export { PaidProfitMetricCard } from "./PaidProfitMetricCard";
 export { StockMetricCard } from "./StockMetricCard";
 export { SupplierPaymentCard } from "./SupplierPaymentCard";
+export { MonthlyBreakdownModal } from "./MonthlyBreakdownModal";
+export { MonthlySalesDetailModal } from "./MonthlySalesDetailModal";

@@ -1,16 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle, ChevronLeft, Plus, X, Check } from "lucide-react";
+import { AlertCircle, ChevronLeft, Plus, X, Check, Info } from "lucide-react";
 import type { Sale, Payment } from "@/types/index";
 import { addPayment, getSales, getSupermarkets } from "@/utils/hybridStorage";
 import { supabase } from "@/lib/supabase";
 import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
+import {
+  calculateVirementPeriod,
+  calculateSupplierReturn,
+} from "@/utils/virementCalculations";
 
 interface VirementsPageProps {
   onBack: () => void;
+}
+
+interface VirementStatus {
+  totalUnpaid: number;
+  totalPaid: number;
+  oldestUnpaidDate: string | null;
+  virementPeriod: string;
+  canReturnToSupplier: boolean;
+  supplierReturnAmount: number;
 }
 
 export function VirementsPage({ onBack }: VirementsPageProps) {
@@ -24,6 +37,14 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
+  const [virementStatus, setVirementStatus] = useState<VirementStatus>({
+    totalUnpaid: 0,
+    totalPaid: 0,
+    oldestUnpaidDate: null,
+    virementPeriod: "En cours",
+    canReturnToSupplier: false,
+    supplierReturnAmount: 0,
+  });
 
   // Android-specific initialization
   useEffect(() => {
@@ -43,6 +64,22 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
         console.log("🌐 Android network status changed:", connected);
       });
     }
+  }, []);
+
+  // Calculate virement status and supplier return logic
+  const calculateVirementStatus = useCallback((sales: Sale[]) => {
+    // Use the utility functions for calculations
+    const virementInfo = calculateVirementPeriod(sales);
+    const supplierInfo = calculateSupplierReturn(sales);
+
+    return {
+      totalUnpaid: supplierInfo.totalUnpaid,
+      totalPaid: supplierInfo.totalPaid,
+      oldestUnpaidDate: virementInfo.oldestDate,
+      virementPeriod: virementInfo.period,
+      canReturnToSupplier: supplierInfo.canReturnToSupplier,
+      supplierReturnAmount: supplierInfo.supplierReturnAmount,
+    };
   }, []);
 
   const createSampleData = async () => {
@@ -105,6 +142,10 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
 
         const allSupermarkets = await getSupermarkets();
         setSupermarkets(allSupermarkets);
+
+        // Update virement status
+        const status = calculateVirementStatus(allSales);
+        setVirementStatus(status);
       };
 
       await loadData();
@@ -183,6 +224,11 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
 
         setSupermarkets(allSupermarkets);
 
+        // Calculate and set virement status
+        const status = calculateVirementStatus(allSales);
+        setVirementStatus(status);
+        console.log("📊 Virement status calculated:", status);
+
         setIsLoading(false);
       } catch (error) {
         console.error("Error loading virements data from Supabase:", error);
@@ -193,7 +239,7 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
     };
 
     loadData();
-  }, []);
+  }, [calculateVirementStatus]);
 
   // Calculate total remaining amount safely
   const totalRemaining = pendingSales.reduce((total, sale) => {
@@ -218,6 +264,11 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
       const unpaidSales = allSales.filter((sale) => !sale.isPaid);
       setPendingSales(unpaidSales);
 
+      // Update virement status after payment
+      const status = calculateVirementStatus(allSales);
+      setVirementStatus(status);
+      console.log("📊 Virement status updated after payment:", status);
+
       // Reset form
       setSelectedSale(null);
       setPaymentAmount(0);
@@ -233,6 +284,14 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
     return supermarket?.name || "Unknown Supermarket";
   };
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("fr-DZ", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
   return (
     <div className="space-y-4 pb-20">
       <div className="flex items-center justify-between mb-5">
@@ -241,7 +300,7 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold text-gray-800">
-            Paiements en Attente
+            Paiements en Attente (Virements)
           </h1>
         </div>
       </div>
@@ -274,19 +333,100 @@ export function VirementsPage({ onBack }: VirementsPageProps) {
         </div>
       )}
 
-      {/* Summary Card */}
+      {/* Virement Status Summary */}
       {!isLoading && (
-        <Card className="border-none shadow-md rounded-xl overflow-hidden mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Total to Receive */}
+          <Card className="border-none shadow-md rounded-xl overflow-hidden">
+            <CardContent className="p-5">
+              <div className="flex items-center">
+                <div className="bg-red-100 rounded-full p-3 mr-4">
+                  <AlertCircle className="h-6 w-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Total à recevoir</p>
+                  <div className="text-2xl font-bold text-gray-800">
+                    {totalRemaining.toLocaleString("fr-DZ")} DZD
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Période: {virementStatus.virementPeriod}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Virement Progress */}
+          <Card className="border-none shadow-md rounded-xl overflow-hidden">
+            <CardContent className="p-5">
+              <div className="flex items-center">
+                <div className="bg-blue-100 rounded-full p-3 mr-4">
+                  <Info className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">
+                    Progression des virements
+                  </p>
+                  <div className="text-2xl font-bold text-gray-800">
+                    {virementStatus.totalPaid.toLocaleString("fr-DZ")} DZD
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {virementStatus.canReturnToSupplier
+                      ? "✅ Virements terminés"
+                      : "⏳ Virements en cours"}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Supplier Return Status */}
+      {!isLoading && virementStatus.canReturnToSupplier && (
+        <Card className="border-none shadow-md rounded-xl overflow-hidden mb-4 bg-green-50 border-green-200">
           <CardContent className="p-5">
             <div className="flex items-center">
-              <div className="bg-red-100 rounded-full p-3 mr-4">
-                <AlertCircle className="h-6 w-6 text-red-600" />
+              <div className="bg-green-100 rounded-full p-3 mr-4">
+                <Check className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Total à recevoir</p>
-                <div className="text-2xl font-bold text-gray-800">
-                  {totalRemaining.toLocaleString("fr-DZ")} DZD
+                <p className="text-sm text-green-600 font-medium">
+                  Retour au fournisseur possible
+                </p>
+                <div className="text-xl font-bold text-green-800">
+                  {virementStatus.supplierReturnAmount.toLocaleString("fr-DZ")}{" "}
+                  DZD
                 </div>
+                <p className="text-xs text-green-600 mt-1">
+                  Tous les virements sont terminés - vous pouvez retourner
+                  l'argent au fournisseur
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Virement Period Info */}
+      {!isLoading && virementStatus.oldestUnpaidDate && (
+        <Card className="border-none shadow-md rounded-xl overflow-hidden mb-4 bg-amber-50 border-amber-200">
+          <CardContent className="p-5">
+            <div className="flex items-center">
+              <div className="bg-amber-100 rounded-full p-3 mr-4">
+                <AlertCircle className="h-6 w-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm text-amber-600 font-medium">
+                  Période des virements
+                </p>
+                <div className="text-lg font-bold text-amber-800">
+                  Depuis le {formatDate(virementStatus.oldestUnpaidDate)}
+                </div>
+                <p className="text-xs text-amber-600 mt-1">
+                  Durée: {virementStatus.virementPeriod} - Les bénéfices sont
+                  calculés sur cette période
+                </p>
               </div>
             </div>
           </CardContent>

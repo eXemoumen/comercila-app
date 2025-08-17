@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, Suspense } from "react";
+import React, { useCallback, useMemo, Suspense, useState } from "react";
 import { MetricsGrid, MonthlySalesData } from "./MetricsGrid";
 import { SalesChart } from "./SalesChart";
 import {
@@ -8,6 +8,9 @@ import {
   ChartErrorBoundary,
 } from "./DashboardErrorBoundary";
 import { DashboardOverviewSkeleton } from "./LoadingSkeleton";
+import { MonthlyBreakdownModal } from "./MonthlyBreakdownModal";
+import { getSales } from "@/utils/hybridStorage";
+import type { Sale } from "@/types/index";
 
 // Lazy load non-critical chart components
 const MonthlyBenefitsChart = React.lazy(() =>
@@ -39,9 +42,12 @@ export interface FragranceStockData {
 }
 
 export interface DashboardData {
-  monthlySales: MonthlySalesData & { fragmentStock: number };
+  monthlySales: MonthlySalesData & {
+    fragmentStock: number;
+    virementPeriod?: string;
+  };
   salesData: Array<{ name: string; value: number }>;
-  fragranceStock: FragranceStockData[];
+  fragranceStock: Array<{ name: string; value: number; color: string }>;
 }
 
 export interface DashboardOverviewProps {
@@ -61,8 +67,36 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
     error = null,
     className = "",
   }) {
+    const [showEstimatedModal, setShowEstimatedModal] = useState(false);
+    const [showPaidModal, setShowPaidModal] = useState(false);
+    const [sales, setSales] = useState<Sale[]>([]);
+
     const handleReload = useCallback(() => {
       window.location.reload();
+    }, []);
+
+    const handleProfitCardClick = useCallback(async () => {
+      // Load sales data when opening the modal
+      try {
+        const salesData = await getSales();
+        setSales(salesData);
+        setShowEstimatedModal(true);
+      } catch (error) {
+        console.error("Error loading sales data:", error);
+        setShowEstimatedModal(true);
+      }
+    }, []);
+
+    const handlePaidProfitCardClick = useCallback(async () => {
+      // Load sales data when opening the modal
+      try {
+        const salesData = await getSales();
+        setSales(salesData);
+        setShowPaidModal(true);
+      } catch (error) {
+        console.error("Error loading sales data:", error);
+        setShowPaidModal(true);
+      }
     }, []);
 
     const errorContent = useMemo(() => {
@@ -122,6 +156,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
             <MetricsGrid
               metrics={dashboardData.monthlySales}
               className="mb-6"
+              onProfitCardClick={handleProfitCardClick}
+              onPaidProfitCardClick={handlePaidProfitCardClick}
             />
           </MetricsErrorBoundary>
         </section>
@@ -224,6 +260,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
             </ChartErrorBoundary>
           </div>
         </section>
+
+        {/* Monthly Breakdown Modals */}
+        <MonthlyBreakdownModal
+          isOpen={showEstimatedModal}
+          onClose={() => setShowEstimatedModal(false)}
+          monthlyBenefits={monthlyBenefits}
+          title={`Bénéfice Estimé - ${
+            dashboardData.monthlySales.virementPeriod || "mois en cours"
+          }`}
+          type="estimated"
+          virementPeriod={dashboardData.monthlySales.virementPeriod}
+          sales={sales}
+        />
+
+        <MonthlyBreakdownModal
+          isOpen={showPaidModal}
+          onClose={() => setShowPaidModal(false)}
+          monthlyBenefits={monthlyBenefits}
+          title={`Bénéfice Réel (Payé) - ${
+            dashboardData.monthlySales.virementPeriod || "mois en cours"
+          }`}
+          type="paid"
+          virementPeriod={dashboardData.monthlySales.virementPeriod}
+          sales={sales}
+        />
       </div>
     );
   }

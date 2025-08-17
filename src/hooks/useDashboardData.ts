@@ -4,6 +4,7 @@ import {
     getCurrentStock,
     getFragranceStock,
 } from "@/utils/hybridStorage";
+import { getDashboardPeriod } from "@/utils/virementCalculations";
 
 interface MonthlySalesData {
     quantity: number;
@@ -13,6 +14,7 @@ interface MonthlySalesData {
     supplierPayment: number;
     paidProfit: number;
     fragmentStock: number;
+    virementPeriod?: string;
 }
 
 interface MonthlyData {
@@ -75,56 +77,20 @@ export function useDashboardData(): UseDashboardDataReturn {
         try {
             setError(null);
 
-            // Get current month's sales
+            // Get all sales data
             const allSales = await getSales();
-            const currentDate = new Date();
-            const currentMonth = currentDate.getMonth();
-            const currentYear = currentDate.getFullYear();
-
-            const monthlySales = allSales.filter((sale) => {
-                const saleDate = new Date(sale.date);
-                return (
-                    saleDate.getMonth() === currentMonth &&
-                    saleDate.getFullYear() === currentYear
-                );
+            
+            // Use the new utility function to get the appropriate period data
+            const periodData = getDashboardPeriod(allSales);
+            
+            console.log(`📊 Using ${periodData.periodLabel} data for dashboard:`, {
+                period: periodData.periodLabel,
+                currentMonth: periodData.currentMonth,
+                lastFourMonths: periodData.lastFourMonths,
+                lastSixMonths: periodData.lastSixMonths,
+                selected: periodData.displayData,
+                virementInfo: periodData.virementInfo
             });
-
-            // Calculate monthly statistics
-            const totalQuantity = monthlySales.reduce(
-                (acc, sale) => acc + sale.quantity,
-                0
-            );
-            const totalRevenue = monthlySales.reduce(
-                (acc, sale) => acc + sale.totalValue,
-                0
-            );
-
-            // Calculate profit based on the actual pricePerUnit from sales
-            const totalProfit = monthlySales.reduce((acc, sale) => {
-                // Determine benefit per unit based on sale price
-                const benefitPerUnit =
-                    sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-                return acc + sale.quantity * benefitPerUnit;
-            }, 0);
-
-            // Calculate profit from paid sales only
-            const paidProfit = monthlySales.reduce((acc, sale) => {
-                if (sale.isPaid) {
-                    // Only include paid sales
-                    const benefitPerUnit =
-                        sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-                    return acc + sale.quantity * benefitPerUnit;
-                }
-                return acc;
-            }, 0);
-
-            // Calculate supplier payment amount
-            const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
-                // Determine supplier cost per unit based on sale price
-                const supplierCostPerUnit =
-                    sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
-                return acc + sale.quantity * supplierCostPerUnit;
-            }, 0);
 
             const { currentStock, fragranceStock: fragmentStock } = await getCurrentStock();
 
@@ -162,13 +128,14 @@ export function useDashboardData(): UseDashboardDataReturn {
 
             setDashboardData({
                 monthlySales: {
-                    quantity: totalQuantity,
-                    revenue: totalRevenue,
-                    profit: totalProfit,
+                    quantity: periodData.displayData.quantity,
+                    revenue: periodData.displayData.revenue,
+                    profit: periodData.displayData.profit,
                     stock: currentStock * 9, // Convert cartons to units
-                    supplierPayment: totalSupplierPayment,
-                    paidProfit: paidProfit,
-                    fragmentStock: fragmentStock
+                    supplierPayment: periodData.displayData.supplierPayment,
+                    paidProfit: periodData.displayData.paidProfit,
+                    fragmentStock: fragmentStock,
+                    virementPeriod: periodData.periodLabel
                 },
                 salesData,
                 fragranceStock: fragranceData,
@@ -179,12 +146,13 @@ export function useDashboardData(): UseDashboardDataReturn {
         }
     }, []);
 
-    // Calculate monthly benefits data
+    // Calculate monthly benefits data with proper virement handling
     const calculateMonthlyBenefits = useCallback(async () => {
         try {
             const allSales = await getSales();
             const monthlyData: Record<string, MonthlyData> = {};
 
+            // Group sales by month and calculate benefits
             allSales.forEach((sale) => {
                 const date = new Date(sale.date);
                 // Format the month and year in French with proper capitalization
@@ -209,7 +177,11 @@ export function useDashboardData(): UseDashboardDataReturn {
 
                 monthlyData[monthYear].quantity += sale.quantity;
                 monthlyData[monthYear].value += sale.totalValue;
-                monthlyData[monthYear].netBenefit += sale.quantity * benefitPerUnit;
+                
+                // Only count benefits for paid sales in monthly breakdown
+                if (sale.isPaid) {
+                    monthlyData[monthYear].netBenefit += sale.quantity * benefitPerUnit;
+                }
             });
 
             setMonthlyBenefits(monthlyData);
