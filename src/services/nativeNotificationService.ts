@@ -48,18 +48,18 @@ class NativeNotificationService {
 
   // Setup notification event listeners
   private setupNotificationListeners(): void {
-    // Listen for notification received while app is in foreground
+    // Listen for notification received
     LocalNotifications.addListener('localNotificationReceived', (notification) => {
       console.log('Notification received:', notification);
       // Handle notification received event
-      this.handleNotificationReceived(notification);
+      // this.handleNotificationReceived(notification);
     });
 
     // Listen for notification action clicked
     LocalNotifications.addListener('localNotificationActionPerformed', (notificationAction) => {
       console.log('Notification action performed:', notificationAction);
       // Handle notification action
-      this.handleNotificationAction(notificationAction);
+      // this.handleNotificationAction(notificationAction);
     });
   }
 
@@ -84,14 +84,14 @@ class NativeNotificationService {
   }
 
   // Handle notification received
-  private handleNotificationReceived(notification: any): void {
+  private handleNotificationReceived(notification: { id: number; title: string; body: string }): void {
     // You can add custom logic here when notification is received
     console.log('Handling notification received:', notification);
   }
 
   // Handle notification action
-  private handleNotificationAction(notificationAction: any): void {
-    const { actionId, notification } = notificationAction;
+  private handleNotificationAction(notificationAction: { actionId: string; notification: { id: number; title: string; body: string } }): void {
+    const { actionId } = notificationAction;
     
     if (actionId === 'OPEN_APP') {
       // Handle app opening action

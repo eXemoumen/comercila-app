@@ -361,25 +361,6 @@ export const getSupabaseFragranceStock = async (): Promise<FragranceStock[]> => 
 export const getSupabaseCurrentStock = async (): Promise<{ current_stock: number, fragrance_stock: number }> => {
     console.log('🔍 Fetching current stock from Supabase...');
     
-    const { data, error } = await supabase
-        .from('stock_history')
-        .select('current_stock')
-        .order('date', { ascending: false })
-        .limit(1)
-        .single();
-
-    if (error) {
-        console.error('❌ Error fetching current stock:', error);
-        return { current_stock: 0, fragrance_stock: 0 };
-    }
-
-    console.log('📊 Stock history data:', data);
-
-    if (!data) {
-        console.log('⚠️ No stock history data found');
-        return { current_stock: 0, fragrance_stock: 0 };
-    }
-
     // Get actual fragrance stock from fragrance_stock table
     console.log('🔍 Fetching fragrance stock from Supabase...');
     const { data: fragranceData, error: fragranceError } = await supabase
@@ -388,20 +369,20 @@ export const getSupabaseCurrentStock = async (): Promise<{ current_stock: number
 
     if (fragranceError) {
         console.error('❌ Error fetching fragrance stock:', fragranceError);
-        return { current_stock: data.current_stock, fragrance_stock: 0 };
+        return { current_stock: 0, fragrance_stock: 0 };
     }
 
     console.log('📊 Raw fragrance stock data:', fragranceData);
     console.log('📊 Number of fragrance records:', fragranceData?.length || 0);
 
-    const fragranceStock = fragranceData?.reduce((acc, item) => {
+    const currentStock = fragranceData?.reduce((acc, item) => {
         console.log(`📦 Fragrance: ${item.name}, Quantity: ${item.quantity}`);
         return acc + item.quantity;
     }, 0) || 0;
 
-    console.log('📊 Total fragrance stock calculated:', fragranceStock);
+    console.log('📊 Total current stock calculated:', currentStock);
 
-    const result = { current_stock: data.current_stock, fragrance_stock: fragranceStock };
+    const result = { current_stock: currentStock, fragrance_stock: currentStock };
     console.log('📊 Final stock result:', result);
     
     return result;
@@ -409,78 +390,96 @@ export const getSupabaseCurrentStock = async (): Promise<{ current_stock: number
 
 
 export const updateSupabaseFragranceStock = async (fragranceId: string, quantity: number): Promise<FragranceStock | null> => {
-    // First try to update existing
-    const { data: existing } = await supabase
-        .from("fragrance_stock")
-        .select("*")
-        .eq("fragrance_id", fragranceId)
-        .single();
-
-    if (existing) {
-        const newQuantity = existing.quantity + quantity;
-        const { data, error } = await supabase
-            .from("fragrance_stock")
-            .update({
-                quantity: newQuantity,
-                updated_at: new Date().toISOString()
-            })
-            .eq("fragrance_id", fragranceId)
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error updating fragrance stock:", error);
-            return null;
-        }
-
-        return {
-            fragranceId: data.fragrance_id,
-            name: data.name,
-            quantity: data.quantity,
-            color: data.color
-        };
-    } else {
-        // If record doesn't exist, create it
-        // Get fragrance details from DEFAULT_FRAGRANCES
-        const DEFAULT_FRAGRANCES = [
-            { id: '1', name: 'Lavande', color: '#9F7AEA' },
-            { id: '2', name: 'Rose', color: '#F687B3' },
-            { id: '3', name: 'Citron', color: '#FBBF24' },
-            { id: '4', name: 'Fraîcheur Marine', color: '#60A5FA' },
-            { id: '5', name: 'Vanille', color: '#F59E0B' },
-            { id: '6', name: 'Grenade', color: '#F97316' },
-            { id: '7', name: 'Jasmin', color: '#10B981' },
-            { id: '8', name: 'Amande', color: '#8B5CF6' },
-        ];
+    try {
+        console.log(`🌸 Updating fragrance stock: ${fragranceId}, quantity: ${quantity}`);
         
-        const fragrance = DEFAULT_FRAGRANCES.find(f => f.id === fragranceId);
-        if (!fragrance) {
-            console.error("Fragrance not found:", fragranceId);
-            return null;
-        }
-
-        const { data, error } = await supabase
+        // First try to update existing
+        const { data: existing, error: fetchError } = await supabase
             .from("fragrance_stock")
-            .insert([{
-                fragrance_id: fragranceId,
-                name: fragrance.name,
-                quantity: quantity,
-                color: fragrance.color
-            }])
-            .select()
+            .select("*")
+            .eq("fragrance_id", fragranceId)
             .single();
 
-        if (error) {
-            console.error("Error creating fragrance stock:", error);
+        if (fetchError && fetchError.code !== 'PGRST116') {
+            console.error("Error fetching existing fragrance stock:", fetchError);
             return null;
         }
 
-        return {
-            fragranceId: data.fragrance_id,
-            name: data.name,
-            quantity: data.quantity,
-            color: data.color
-        };
+        if (existing) {
+            const newQuantity = existing.quantity + quantity;
+            console.log(`  Existing: ${existing.quantity} + ${quantity} = ${newQuantity}`);
+            
+            const { data, error } = await supabase
+                .from("fragrance_stock")
+                .update({
+                    quantity: newQuantity,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("fragrance_id", fragranceId)
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Error updating fragrance stock:", error);
+                return null;
+            }
+
+            console.log(`  ✅ Updated ${data.name}: ${newQuantity} cartons`);
+            return {
+                fragranceId: data.fragrance_id,
+                name: data.name,
+                quantity: data.quantity,
+                color: data.color
+            };
+        } else {
+            // If record doesn't exist, create it
+            // Get fragrance details from DEFAULT_FRAGRANCES
+            const DEFAULT_FRAGRANCES = [
+                { id: '1', name: 'Lavande', color: '#9F7AEA' },
+                { id: '2', name: 'Rose', color: '#F687B3' },
+                { id: '3', name: 'Citron', color: '#FBBF24' },
+                { id: '4', name: 'Fraîcheur Marine', color: '#60A5FA' },
+                { id: '5', name: 'Vanille', color: '#F59E0B' },
+                { id: '6', name: 'Grenade', color: '#F97316' },
+                { id: '7', name: 'Jasmin', color: '#10B981' },
+                { id: '8', name: 'Amande', color: '#8B5CF6' },
+            ];
+            
+            const fragrance = DEFAULT_FRAGRANCES.find(f => f.id === fragranceId);
+            if (!fragrance) {
+                console.error("Fragrance not found:", fragranceId);
+                return null;
+            }
+
+            console.log(`  Creating new fragrance stock: ${fragrance.name} with ${quantity} cartons`);
+            
+            const { data, error } = await supabase
+                .from("fragrance_stock")
+                .insert([{
+                    fragrance_id: fragranceId,
+                    name: fragrance.name,
+                    quantity: quantity,
+                    color: fragrance.color
+                }])
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Error creating fragrance stock:", error);
+                return null;
+            }
+
+            console.log(`  ✅ Created ${data.name}: ${data.quantity} cartons`);
+            return {
+                fragranceId: data.fragrance_id,
+                name: data.name,
+                quantity: data.quantity,
+                color: data.color
+            };
+        }
+    } catch (error) {
+        console.error(`❌ Error in updateSupabaseFragranceStock for ${fragranceId}:`, error);
+        return null;
     }
 };
 

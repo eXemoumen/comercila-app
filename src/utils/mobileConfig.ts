@@ -3,22 +3,17 @@
 /**
  * Detect if the current device is Android
  */
-export function isAndroid(): boolean {
-  if (typeof window === 'undefined') return false;
-  
-  const userAgent = window.navigator.userAgent.toLowerCase();
-  const isAndroidDevice = userAgent.includes('android');
-  
-  // Debug logging
-  console.log('🔍 Mobile Detection Debug:', {
-    userAgent: window.navigator.userAgent,
-    isAndroid: isAndroidDevice,
-    windowWidth: window.innerWidth,
-    windowHeight: window.innerHeight
-  });
-  
-  return isAndroidDevice;
-}
+export const isAndroid = (): boolean => {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (typeof navigator === 'undefined') return false;
+    
+    return /Android/i.test(navigator.userAgent);
+  } catch (error) {
+    console.warn('Error detecting Android platform:', error);
+    return false;
+  }
+};
 
 /**
  * Detect if the current device is mobile

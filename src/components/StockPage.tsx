@@ -187,20 +187,19 @@ export function StockPage({ onBack }: StockPageProps) {
 
       // Check if fragrance distribution is enabled
       if (showFragranceForm) {
-        // Calculate total fragrance quantities to ensure they match the total stock
-        const totalFragranceQty = Object.values(fragranceDistribution).reduce(
-          (sum, qty) => sum + qty,
-          0
-        );
-
-        if (totalFragranceQty !== newStock.cartons) {
-          alert(
-            `La distribution des parfums (${totalFragranceQty} cartons) doit correspondre au stock total (${newStock.cartons} cartons).`
-          );
-          return;
-        }
+        // For stock adjustments, we don't need to validate that fragrance distribution matches total stock
+        // because the fragrance distribution represents the final allocation, not the change
+        // The system will calculate the differences automatically
 
         // This represents a completely new stock allocation
+        console.log(
+          `🔄 Adjusting stock from ${currentStock} to ${newStock.cartons} cartons`
+        );
+        console.log(
+          `📊 Current fragrance distribution:`,
+          fragranceDistribution
+        );
+
         // First, save the current fragrance stock to calculate differences
         const currentFragranceStock = await getFragranceStock();
         const fragranceChanges: Record<string, number> = {};
@@ -209,16 +208,27 @@ export function StockPage({ onBack }: StockPageProps) {
         currentFragranceStock.forEach((fragrance: FragranceStock) => {
           const currentQty = fragrance.quantity;
           const newQty = fragranceDistribution[fragrance.fragranceId] || 0;
-          fragranceChanges[fragrance.fragranceId] = newQty - currentQty;
+          const change = newQty - currentQty;
+          fragranceChanges[fragrance.fragranceId] = change;
+          console.log(
+            `  ${fragrance.name}: ${currentQty} → ${newQty} (${
+              change > 0 ? "+" : ""
+            }${change})`
+          );
         });
 
+        console.log(`📦 Total stock change: ${difference} cartons`);
+        console.log(`🌸 Fragrance changes:`, fragranceChanges);
+
         // Update stock with the calculated changes
-        updateStock(
+        const result = await updateStock(
           difference,
           "adjusted",
           "Ajustement manuel",
           fragranceChanges
         );
+
+        console.log(`✅ Stock adjustment completed. New total: ${result}`);
       } else {
         // If fragrance form not used, distribute stock evenly
         const allFragrances = await getFragrances();
@@ -255,6 +265,11 @@ export function StockPage({ onBack }: StockPageProps) {
 
     // Refresh the stock data after successful update
     await loadStockData();
+
+    // Dispatch event to notify other components
+    console.log("📡 Dispatching saleDataChanged event from stock page");
+    const event = new CustomEvent("saleDataChanged");
+    window.dispatchEvent(event);
 
     // Reset the form
     setShowAdjustForm(false);
@@ -409,8 +424,48 @@ export function StockPage({ onBack }: StockPageProps) {
                   variant="outline"
                   className="rounded-l-xl h-12 w-12 flex items-center justify-center border-gray-200"
                   onClick={async () => {
-                    setNewStock({ cartons: Math.max(0, newStock.cartons - 1) });
-                    await resetFragranceDistribution();
+                    const newValue = Math.max(0, newStock.cartons - 1);
+                    setNewStock({ cartons: newValue });
+
+                    // If fragrance form is enabled, auto-adjust distribution
+                    if (showFragranceForm && newValue > 0) {
+                      const currentTotal = Object.values(
+                        fragranceDistribution
+                      ).reduce((sum, qty) => sum + qty, 0);
+
+                      if (currentTotal > 0) {
+                        // Scale the distribution proportionally
+                        const scale = newValue / currentTotal;
+                        const adjustedDistribution: Record<string, number> = {};
+
+                        Object.entries(fragranceDistribution).forEach(
+                          ([fragranceId, qty]) => {
+                            adjustedDistribution[fragranceId] = Math.round(
+                              qty * scale
+                            );
+                          }
+                        );
+
+                        // Ensure the total matches exactly by adjusting the first fragrance
+                        const newTotal = Object.values(
+                          adjustedDistribution
+                        ).reduce((sum, qty) => sum + qty, 0);
+                        if (newTotal !== newValue) {
+                          const firstFragranceId =
+                            Object.keys(adjustedDistribution)[0];
+                          if (firstFragranceId) {
+                            adjustedDistribution[firstFragranceId] +=
+                              newValue - newTotal;
+                          }
+                        }
+
+                        setFragranceDistribution(adjustedDistribution);
+                      } else {
+                        await resetFragranceDistribution();
+                      }
+                    } else {
+                      await resetFragranceDistribution();
+                    }
                   }}
                 >
                   <Minus className="h-4 w-4" />
@@ -420,8 +475,48 @@ export function StockPage({ onBack }: StockPageProps) {
                   className="flex-1 h-12 text-center border-x-0 border-y border-gray-200"
                   value={newStock.cartons}
                   onChange={async (e) => {
-                    setNewStock({ cartons: parseInt(e.target.value) || 0 });
-                    await resetFragranceDistribution();
+                    const newValue = parseInt(e.target.value) || 0;
+                    setNewStock({ cartons: newValue });
+
+                    // If fragrance form is enabled, auto-adjust distribution
+                    if (showFragranceForm && newValue > 0) {
+                      const currentTotal = Object.values(
+                        fragranceDistribution
+                      ).reduce((sum, qty) => sum + qty, 0);
+
+                      if (currentTotal > 0) {
+                        // Scale the distribution proportionally
+                        const scale = newValue / currentTotal;
+                        const adjustedDistribution: Record<string, number> = {};
+
+                        Object.entries(fragranceDistribution).forEach(
+                          ([fragranceId, qty]) => {
+                            adjustedDistribution[fragranceId] = Math.round(
+                              qty * scale
+                            );
+                          }
+                        );
+
+                        // Ensure the total matches exactly by adjusting the first fragrance
+                        const newTotal = Object.values(
+                          adjustedDistribution
+                        ).reduce((sum, qty) => sum + qty, 0);
+                        if (newTotal !== newValue) {
+                          const firstFragranceId =
+                            Object.keys(adjustedDistribution)[0];
+                          if (firstFragranceId) {
+                            adjustedDistribution[firstFragranceId] +=
+                              newValue - newTotal;
+                          }
+                        }
+
+                        setFragranceDistribution(adjustedDistribution);
+                      } else {
+                        await resetFragranceDistribution();
+                      }
+                    } else {
+                      await resetFragranceDistribution();
+                    }
                   }}
                   min="0"
                   max="300"
@@ -432,10 +527,48 @@ export function StockPage({ onBack }: StockPageProps) {
                   variant="outline"
                   className="rounded-r-xl h-12 w-12 flex items-center justify-center border-gray-200"
                   onClick={async () => {
-                    setNewStock({
-                      cartons: Math.min(300, newStock.cartons + 1),
-                    });
-                    await resetFragranceDistribution();
+                    const newValue = Math.min(300, newStock.cartons + 1);
+                    setNewStock({ cartons: newValue });
+
+                    // If fragrance form is enabled, auto-adjust distribution
+                    if (showFragranceForm && newValue > 0) {
+                      const currentTotal = Object.values(
+                        fragranceDistribution
+                      ).reduce((sum, qty) => sum + qty, 0);
+
+                      if (currentTotal > 0) {
+                        // Scale the distribution proportionally
+                        const scale = newValue / currentTotal;
+                        const adjustedDistribution: Record<string, number> = {};
+
+                        Object.entries(fragranceDistribution).forEach(
+                          ([fragranceId, qty]) => {
+                            adjustedDistribution[fragranceId] = Math.round(
+                              qty * scale
+                            );
+                          }
+                        );
+
+                        // Ensure the total matches exactly by adjusting the first fragrance
+                        const newTotal = Object.values(
+                          adjustedDistribution
+                        ).reduce((sum, qty) => sum + qty, 0);
+                        if (newTotal !== newValue) {
+                          const firstFragranceId =
+                            Object.keys(adjustedDistribution)[0];
+                          if (firstFragranceId) {
+                            adjustedDistribution[firstFragranceId] +=
+                              newValue - newTotal;
+                          }
+                        }
+
+                        setFragranceDistribution(adjustedDistribution);
+                      } else {
+                        await resetFragranceDistribution();
+                      }
+                    } else {
+                      await resetFragranceDistribution();
+                    }
                   }}
                 >
                   <Plus className="h-4 w-4" />
@@ -499,9 +632,15 @@ export function StockPage({ onBack }: StockPageProps) {
             {/* Fragrance distribution inputs */}
             {showFragranceForm && newStock.cartons > 0 && (
               <div className="space-y-3 pt-2 border p-3 rounded-xl border-purple-100 bg-purple-50">
-                <h3 className="text-sm font-medium text-purple-700">
-                  Distribution du stock ({newStock.cartons} cartons au total)
-                </h3>
+                <div>
+                  <h3 className="text-sm font-medium text-purple-700">
+                    Distribution du stock ({newStock.cartons} cartons au total)
+                  </h3>
+                  <p className="text-xs text-purple-600 mt-1">
+                    Spécifiez la quantité finale souhaitée pour chaque parfum.
+                    Le système calculera automatiquement les différences.
+                  </p>
+                </div>
                 {/* Debug info */}
                 <div className="text-xs text-gray-500">
                   Debug: fragranceStock.length = {fragranceStock.length}
@@ -607,20 +746,18 @@ export function StockPage({ onBack }: StockPageProps) {
                   ))}
                 </div>
                 <div className="text-sm text-purple-600 pt-1">
-                  Total distribué:{" "}
-                  {Object.values(fragranceDistribution).reduce(
-                    (sum, qty) => sum + qty,
-                    0
-                  )}{" "}
-                  / {newStock.cartons} cartons
-                  {Object.values(fragranceDistribution).reduce(
-                    (sum, qty) => sum + qty,
-                    0
-                  ) !== newStock.cartons && (
-                    <div className="text-red-500 font-medium mt-1">
-                      Le total doit correspondre exactement au stock total
-                    </div>
-                  )}
+                  <div>
+                    Total distribué:{" "}
+                    {Object.values(fragranceDistribution).reduce(
+                      (sum, qty) => sum + qty,
+                      0
+                    )}{" "}
+                    / {newStock.cartons} cartons
+                  </div>
+                  <div className="text-xs text-purple-500 mt-1">
+                    Le système ajustera automatiquement les quantités pour
+                    correspondre au stock total
+                  </div>
                 </div>
               </div>
             )}
