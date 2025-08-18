@@ -160,7 +160,9 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
         <div className="order-5">
           <MetricCard
             title="Stock Fragrances"
-            value={`${metrics.fragmentStock.toLocaleString("fr-DZ")} unités`}
+            value={`${Math.floor(metrics.fragmentStock / 9).toLocaleString(
+              "fr-DZ"
+            )} cartons`}
             color="emerald"
             icon={Package}
             className="h-full"
