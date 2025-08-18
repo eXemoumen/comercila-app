@@ -42,6 +42,7 @@ import { getMigrationStatus } from './migration';
 import { supabase } from '@/lib/supabase';
 import type { Sale, Order, Stock, Payment, Supermarket, FragranceStock } from './storage';
 import { isAndroid } from './mobileConfig';
+import { offlineStorageManager } from './androidOfflineStorage';
 
 // Configuration for which data sources to use
 const USE_SUPABASE = {
@@ -54,6 +55,10 @@ const USE_SUPABASE = {
 
 // Force Supabase usage - but migrate data first
 const FORCE_SUPABASE = true;
+
+// Android offline mode configuration
+const USE_ANDROID_OFFLINE = false; // Temporarily disabled to prevent runtime errors
+// const USE_ANDROID_OFFLINE = isAndroid();
 
 // Update configuration based on migration status
 const updateStorageConfig = async () => {
@@ -201,10 +206,23 @@ const initializeStorage = async () => {
     isInitialized = true;
 };
 
-// Hybrid Sales Functions
+// Hybrid Sales Functions with Android offline support
 export const getSales = async (): Promise<Sale[]> => {
     await initializeStorage();
     console.log('🛒 Getting sales data...');
+
+    // Use Android offline storage if available
+    if (USE_ANDROID_OFFLINE) {
+        console.log('🤖 Using Android offline storage for sales data');
+        try {
+            const androidSales = await offlineStorageManager.getSales();
+            console.log('🤖 Android sales loaded:', androidSales.length, 'records');
+            return androidSales;
+        } catch (error) {
+            console.error('❌ Android offline storage error:', error);
+            // Fallback to regular storage
+        }
+    }
 
     if (USE_SUPABASE.sales) {
         console.log('📊 Using Supabase for sales data');
@@ -221,6 +239,19 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
     await initializeStorage();
     console.log('➕ Adding sale data...');
 
+    // Use Android offline storage if available
+    if (USE_ANDROID_OFFLINE) {
+        console.log('🤖 Using Android offline storage to add sale');
+        try {
+            const sale = { ...saleData, id: Date.now().toString() };
+            await offlineStorageManager.saveSale(sale);
+            return sale;
+        } catch (error) {
+            console.error('❌ Android offline storage error:', error);
+            // Fallback to regular storage
+        }
+    }
+
     if (USE_SUPABASE.sales) {
         console.log('📊 Using Supabase to add sale');
         return await addSupabaseSale(saleData);
@@ -233,6 +264,18 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
 export const deleteSale = async (saleId: string): Promise<boolean> => {
     await initializeStorage();
 
+    // Use Android offline storage if available
+    if (USE_ANDROID_OFFLINE) {
+        console.log('🤖 Using Android offline storage to delete sale');
+        try {
+            await offlineStorageManager.deleteSale(saleId);
+            return true;
+        } catch (error) {
+            console.error('❌ Android offline storage error:', error);
+            // Fallback to regular storage
+        }
+    }
+
     if (USE_SUPABASE.sales) {
         return await deleteSupabaseSale(saleId);
     } else {
@@ -243,6 +286,24 @@ export const deleteSale = async (saleId: string): Promise<boolean> => {
 export const updateSalePayment = async (saleId: string, isPaid: boolean): Promise<Sale | null> => {
     await initializeStorage();
 
+    // Use Android offline storage if available
+    if (USE_ANDROID_OFFLINE) {
+        console.log('🤖 Using Android offline storage to update sale payment');
+        try {
+            const sales = await offlineStorageManager.getSales();
+            const sale = sales.find(s => s.id === saleId);
+            if (sale) {
+                sale.isPaid = isPaid;
+                sale.paymentDate = new Date().toISOString();
+                await offlineStorageManager.saveSale(sale);
+                return sale;
+            }
+        } catch (error) {
+            console.error('❌ Android offline storage error:', error);
+            // Fallback to regular storage
+        }
+    }
+
     if (USE_SUPABASE.sales) {
         return await updateSupabaseSalePayment(saleId, isPaid);
     } else {
@@ -252,6 +313,30 @@ export const updateSalePayment = async (saleId: string, isPaid: boolean): Promis
 
 export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): Promise<Sale | null> => {
     await initializeStorage();
+
+    // Use Android offline storage if available
+    if (USE_ANDROID_OFFLINE) {
+        console.log('🤖 Using Android offline storage to add payment');
+        try {
+            const sales = await offlineStorageManager.getSales();
+            const sale = sales.find(s => s.id === saleId);
+            if (sale) {
+                const newPayment = { ...payment, id: Date.now().toString() };
+                sale.payments = sale.payments || [];
+                sale.payments.push(newPayment);
+                sale.remainingAmount = Math.max(0, sale.remainingAmount - payment.amount);
+                if (sale.remainingAmount === 0) {
+                    sale.isPaid = true;
+                    sale.paymentDate = new Date().toISOString();
+                }
+                await offlineStorageManager.saveSale(sale);
+                return sale;
+            }
+        } catch (error) {
+            console.error('❌ Android offline storage error:', error);
+            // Fallback to regular storage
+        }
+    }
 
     if (USE_SUPABASE.sales) {
         return await addSupabasePayment(saleId, payment);
@@ -319,25 +404,42 @@ export const updateStock = async (
     fragranceDistribution?: Record<string, number>
 ): Promise<number> => {
     await initializeStorage();
+    
+    console.log(`🔄 Updating stock: ${quantity} cartons, type: ${type}, reason: ${reason}`);
+    console.log(`📊 Fragrance distribution:`, fragranceDistribution);
 
     if (USE_SUPABASE.stock) {
-        // For Supabase, we need to calculate current stock first
-        const { currentStock } = await getCurrentStock();
-        const safeCurrentStock = currentStock || 0;
-        const newStock = type === 'removed' ? safeCurrentStock - quantity :
-            type === 'added' ? safeCurrentStock + quantity : quantity;
-
-        await addSupabaseStockEntry(quantity, type, reason, newStock, fragranceDistribution);
-
-        // Update fragrance stock if distribution provided
-        if (fragranceDistribution) {
-            for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
-                const adjustedQty = type === 'adjusted' ? qty : (type === 'removed' ? -qty : qty);
-                await updateSupabaseFragranceStock(fragranceId, adjustedQty);
+        try {
+            // Update fragrance stock first if distribution provided
+            if (fragranceDistribution) {
+                console.log(`🌸 Updating fragrance stock with distribution...`);
+                for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
+                    const adjustedQty = type === 'adjusted' ? qty : (type === 'removed' ? -qty : qty);
+                    console.log(`  Fragrance ${fragranceId}: ${qty} → ${adjustedQty} (${type})`);
+                    const result = await updateSupabaseFragranceStock(fragranceId, adjustedQty);
+                    if (result) {
+                        console.log(`  ✅ Updated ${result.name}: ${result.quantity} cartons`);
+                    } else {
+                        console.error(`  ❌ Failed to update fragrance ${fragranceId}`);
+                    }
+                }
             }
-        }
 
-        return newStock;
+            // Get the actual current stock after updating fragrance stock
+            const { currentStock } = await getCurrentStock();
+            const actualCurrentStock = currentStock || 0;
+            
+            console.log(`📦 Actual current stock after updates: ${actualCurrentStock}`);
+
+            // Add to history with the actual current stock
+            await addSupabaseStockEntry(quantity, type, reason, actualCurrentStock, fragranceDistribution);
+
+            console.log(`✅ Stock update completed. New total: ${actualCurrentStock}`);
+            return actualCurrentStock;
+        } catch (error) {
+            console.error(`❌ Error updating stock:`, error);
+            throw error;
+        }
     } else {
         return updateLocalStock(quantity, type, reason, fragranceDistribution);
     }
@@ -440,4 +542,28 @@ export const syncFragranceStock = async (): Promise<void> => {
     } else {
         console.log('💾 Local storage sync not implemented');
     }
+};
+
+// Add Android-specific sync functions
+export const triggerAndroidSync = async (): Promise<void> => {
+    if (USE_ANDROID_OFFLINE) {
+        console.log('🔄 Triggering Android sync...');
+        await offlineStorageManager.triggerSync();
+    }
+};
+
+export const getAndroidSyncStatus = async () => {
+    if (USE_ANDROID_OFFLINE) {
+        return await offlineStorageManager.getSyncStatus();
+    }
+    return { lastSync: null, isOnline: navigator.onLine, queueStatus: { pending: 0, failed: 0 } };
+};
+
+export const isAndroidOfflineAvailable = (): boolean => {
+  try {
+    return USE_ANDROID_OFFLINE;
+  } catch (error) {
+    console.warn('Error checking Android offline availability:', error);
+    return false;
+  }
 };

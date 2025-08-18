@@ -126,7 +126,7 @@ export function useDashboardData(): UseDashboardDataReturn {
                 return acc + sale.quantity * supplierCostPerUnit;
             }, 0);
 
-            const { currentStock, fragranceStock: fragmentStock } = await getCurrentStock();
+            const { currentStock } = await getCurrentStock();
 
             // Get fragrance stock data for the pie chart
             const fragranceStock = await getFragranceStock();
@@ -168,7 +168,7 @@ export function useDashboardData(): UseDashboardDataReturn {
                     stock: currentStock * 9, // Convert cartons to units
                     supplierPayment: totalSupplierPayment,
                     paidProfit: paidProfit,
-                    fragmentStock: fragmentStock
+                    fragmentStock: currentStock * 9 // Use current stock instead of fragment stock
                 },
                 salesData,
                 fragranceStock: fragranceData,
