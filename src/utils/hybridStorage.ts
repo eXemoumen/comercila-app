@@ -47,6 +47,7 @@ import { networkDetector } from './networkDetection';
 import { 
     getOfflineSales, 
     addOfflineSale, 
+    deleteOfflineSale,
     getOfflineSupermarkets,
     getOfflineFragranceStock,
     updateOfflineFragranceStock,
@@ -233,12 +234,34 @@ const syncPendingOperations = async () => {
             for (const operation of pendingSales) {
                 try {
                     if (operation.type === 'create') {
+                        // Add sale to Supabase
                         await addSupabaseSale(operation.data);
+                        
+                        // Update stock in Supabase for this sale
+                        if (operation.data.fragranceDistribution) {
+                            console.log('🔄 Syncing stock update for sale:', operation.id);
+                            await updateStock(
+                                -operation.data.cartons, // Negative because it's a removal
+                                'removed',
+                                `Vente offline sync: ${operation.data.cartons} cartons`,
+                                operation.data.fragranceDistribution
+                            );
+                        }
+                        
+                        // Remove from offline storage to prevent duplicates
+                        try {
+                            await deleteOfflineSale(operation.data.id || operation.id);
+                            console.log('🗑️ Removed offline sale after successful sync:', operation.id);
+                        } catch (deleteError) {
+                            console.warn('⚠️ Could not remove offline sale:', deleteError);
+                        }
+                        
                         successfulSales.push(operation);
-                        console.log('✅ Synced sale:', operation.id);
+                        console.log('✅ Synced sale and stock:', operation.id);
                     }
                 } catch (error) {
                     console.error('❌ Failed to sync sale:', operation.id, error);
+                    operation.failed = true;
                     failedSales.push(operation);
                 }
             }
@@ -249,7 +272,8 @@ const syncPendingOperations = async () => {
             if (successfulSales.length > 0) {
                 // Clear cached data to force refresh
                 localStorage.removeItem('cachedSales');
-                console.log('🎉 Successfully synced', successfulSales.length, 'sales');
+                localStorage.removeItem('cachedFragranceStock');
+                console.log('🎉 Successfully synced', successfulSales.length, 'sales with stock updates');
             }
         }
         
@@ -340,9 +364,6 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
     }
 
     if (USE_SUPABASE.sales) {
-        // Always add to offline storage first for immediate availability
-        const offlineSale = await addOfflineSale(saleData);
-        
         if (networkDetector.isOnline()) {
             try {
                 console.log('📊 Using Supabase to add sale (online)');
@@ -353,7 +374,10 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
                 
                 return supabaseSale;
             } catch (error) {
-                console.warn('❌ Failed to add sale to Supabase, queued for sync:', error);
+                console.warn('❌ Failed to add sale to Supabase, falling back to offline:', error);
+                
+                // Fallback to offline storage
+                const offlineSale = await addOfflineSale(saleData);
                 
                 // Queue for sync when online
                 const pendingOps = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
@@ -368,7 +392,10 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
                 return offlineSale;
             }
         } else {
-            console.log('📱 Offline: Adding sale to local storage and queue for sync');
+            console.log('📱 Offline: Adding sale to offline storage and queue for sync');
+            
+            // Add to offline storage for immediate availability
+            const offlineSale = await addOfflineSale(saleData);
             
             // Queue for sync when online
             const pendingOps = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
@@ -825,15 +852,36 @@ export const isAndroidOfflineAvailable = (): boolean => {
 
 // Get offline sync status
 export const getOfflineSyncStatus = () => {
-    const pendingSales = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
-    return { 
-        lastSync: localStorage.getItem('lastSyncTimestamp'), 
-        isOnline: networkDetector.isOnline(), 
-        queueStatus: { 
-            pending: pendingSales.length, 
-            failed: pendingSales.filter((op: {failed?: boolean}) => op.failed).length 
-        } 
-    };
+    try {
+        const pendingSales = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
+        const pendingCount = pendingSales.length;
+        const failedCount = pendingSales.filter((op: {failed?: boolean}) => op.failed).length;
+        
+        console.log('📊 Offline sync status:', { 
+            pending: pendingCount, 
+            failed: failedCount,
+            isOnline: networkDetector.isOnline() 
+        });
+        
+        return { 
+            lastSync: localStorage.getItem('lastSyncTimestamp'), 
+            isOnline: networkDetector.isOnline(), 
+            queueStatus: { 
+                pending: pendingCount, 
+                failed: failedCount
+            } 
+        };
+    } catch (error) {
+        console.error('Error getting offline sync status:', error);
+        return { 
+            lastSync: null, 
+            isOnline: networkDetector.isOnline(), 
+            queueStatus: { 
+                pending: 0, 
+                failed: 0 
+            } 
+        };
+    }
 };
 
 // Export sync function for manual sync
