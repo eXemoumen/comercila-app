@@ -47,3 +47,4 @@ public interface OfflineQueueDao {
     void updateErrorStatus(int id, String status, String errorMessage);
 }
 
+

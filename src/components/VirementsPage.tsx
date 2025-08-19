@@ -11,6 +11,7 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 import { getSales, getSupermarkets, addPayment } from "@/utils/hybridStorage";
 import {
@@ -53,8 +54,8 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
   const [expandedSections, setExpandedSections] = useState({
     summary: true,
     pendingPayments: true,
-    addPayment: false,
   });
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Check if mobile and apply Android optimizations
   useEffect(() => {
@@ -108,6 +109,18 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
     };
 
     loadData();
+
+    // Listen for data changes from other components
+    const handleDataChange = () => {
+      console.log("🔄 VirementsPage: Data change detected, refreshing...");
+      loadData();
+    };
+
+    window.addEventListener("saleDataChanged", handleDataChange);
+
+    return () => {
+      window.removeEventListener("saleDataChanged", handleDataChange);
+    };
   }, [calculateVirementStatus]);
 
   const getSupermarketName = (supermarketId: string) => {
@@ -129,12 +142,32 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount) || amount <= 0) return;
 
+    // Validate payment amount
+    if (amount > selectedSale.remainingAmount) {
+      console.error("❌ Payment amount cannot exceed remaining amount");
+      return;
+    }
+
     try {
-      await addPayment(selectedSale.id, {
+      console.log("🔄 Adding payment:", {
+        saleId: selectedSale.id,
+        amount: amount,
+        remainingAmount: selectedSale.remainingAmount,
         date: new Date().toISOString(),
+      });
+
+      const result = await addPayment(selectedSale.id, {
+        date: new Date().toISOString(), // Use current date for payment
         amount: amount,
         note: paymentNote,
+        type: "virement", // Mark as virement payment
       });
+
+      if (!result) {
+        throw new Error("Failed to add payment");
+      }
+
+      console.log("✅ Payment result:", result);
 
       // Reload sales data
       const updatedSales = await getSales();
@@ -149,9 +182,16 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
       setPaymentAmount("");
       setPaymentNote("");
 
+      // Dispatch event to notify other components about the data change
+      const event = new CustomEvent("saleDataChanged");
+      window.dispatchEvent(event);
+
       console.log("✅ Payment added successfully");
+      console.log(
+        "📡 Dispatched saleDataChanged event to sync with other components"
+      );
     } catch (error) {
-      console.error("Error adding payment:", error);
+      console.error("❌ Error adding payment:", error);
     }
   };
 
@@ -448,7 +488,11 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
 
                           {/* Action Button */}
                           <Button
-                            onClick={() => setSelectedSale(sale)}
+                            onClick={() => {
+                              setSelectedSale(sale);
+                              setPaymentAmount(sale.remainingAmount.toString());
+                              setShowPaymentModal(true);
+                            }}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             <Plus className="h-4 w-4 mr-2" />
@@ -521,7 +565,13 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <Button
-                                  onClick={() => setSelectedSale(sale)}
+                                  onClick={() => {
+                                    setSelectedSale(sale);
+                                    setPaymentAmount(
+                                      sale.remainingAmount.toString()
+                                    );
+                                    setShowPaymentModal(true);
+                                  }}
                                   size="sm"
                                   className="bg-blue-600 hover:bg-blue-700 text-white"
                                 >
@@ -541,115 +591,157 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
           )}
         </Card>
 
-        {/* Add Payment Section - Collapsible */}
-        <Card>
-          <CardHeader
-            className="cursor-pointer hover:bg-gray-50 transition-colors"
-            onClick={() => toggleSection("addPayment")}
+        {/* Payment Modal */}
+        {showPaymentModal && selectedSale && (
+          <div
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+            onClick={() => {
+              setShowPaymentModal(false);
+              setSelectedSale(null);
+              setPaymentAmount("");
+              setPaymentNote("");
+            }}
           >
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Ajouter un Paiement</CardTitle>
-              {expandedSections.addPayment ? (
-                <ChevronUp className="h-5 w-5 text-gray-600" />
-              ) : (
-                <ChevronDown className="h-5 w-5 text-gray-600" />
-              )}
-            </div>
-          </CardHeader>
+            <div
+              className="bg-white p-6 rounded-2xl w-full max-w-md mx-auto shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Ajouter un Paiement
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full h-8 w-8 hover:bg-gray-100"
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    setSelectedSale(null);
+                    setPaymentAmount("");
+                    setPaymentNote("");
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
 
-          {expandedSections.addPayment && (
-            <CardContent>
-              {!selectedSale ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p className="text-lg">Sélectionnez une vente ci-dessus</p>
-                  <p className="text-sm">pour ajouter un paiement</p>
+              <div className="space-y-6">
+                {/* Selected Sale Info */}
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <h4 className="font-semibold text-blue-800 mb-3">
+                    Vente sélectionnée
+                  </h4>
+                  <div className="grid grid-cols-1 gap-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 font-medium">
+                        Supermarché:
+                      </span>
+                      <span className="text-blue-800">
+                        {getSupermarketName(selectedSale.supermarketId)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 font-medium">Date:</span>
+                      <span className="text-blue-800">
+                        {formatDate(selectedSale.date)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 font-medium">
+                        Restant:
+                      </span>
+                      <span className="text-blue-800 font-bold">
+                        {selectedSale.remainingAmount.toLocaleString("fr-DZ")}{" "}
+                        DZD
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 font-medium">
+                        Paiements:
+                      </span>
+                      <span className="text-blue-800">
+                        {selectedSale.payments.length}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              ) : (
+
+                {/* Payment Form */}
                 <div className="space-y-4">
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <h4 className="font-semibold text-blue-800 mb-2">
-                      Vente sélectionnée
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-blue-700">
-                          <strong>Supermarché:</strong>{" "}
-                          {getSupermarketName(selectedSale.supermarketId)}
-                        </p>
-                        <p className="text-blue-700">
-                          <strong>Date:</strong> {formatDate(selectedSale.date)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-blue-700">
-                          <strong>Restant:</strong>{" "}
-                          {selectedSale.remainingAmount.toLocaleString("fr-DZ")}{" "}
-                          DZD
-                        </p>
-                        <p className="text-blue-700">
-                          <strong>Paiements:</strong>{" "}
-                          {selectedSale.payments.length}
-                        </p>
-                      </div>
-                    </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Montant du Paiement (DZD)
+                    </label>
+                    <Input
+                      id="paymentAmount"
+                      type="number"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      placeholder={`Montant max: ${selectedSale.remainingAmount.toLocaleString(
+                        "fr-DZ"
+                      )} DZD`}
+                      className="w-full"
+                      min="0"
+                      max={selectedSale.remainingAmount}
+                      step="0.01"
+                    />
                   </div>
 
-                  <div className="grid gap-4">
-                    <div>
-                      <div className="text-sm font-medium text-gray-700 mb-1">
-                        Montant du Paiement (DZD)
-                      </div>
-                      <Input
-                        id="paymentAmount"
-                        type="number"
-                        value={paymentAmount}
-                        onChange={(e) => setPaymentAmount(e.target.value)}
-                        placeholder="Entrez le montant"
-                        className="mt-1"
-                        min="0"
-                        step="0.01"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-medium text-gray-700 mb-1">
-                        Note (optionnel)
-                      </div>
-                      <Input
-                        id="paymentNote"
-                        value={paymentNote}
-                        onChange={(e) => setPaymentNote(e.target.value)}
-                        placeholder="Note sur le paiement"
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div className="flex space-x-3">
-                      <Button
-                        onClick={handleAddPayment}
-                        disabled={
-                          !paymentAmount || parseFloat(paymentAmount) <= 0
-                        }
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Ajouter le Paiement
-                      </Button>
-
-                      <Button
-                        onClick={() => setSelectedSale(null)}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        Annuler
-                      </Button>
-                    </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Note (optionnel)
+                    </label>
+                    <Input
+                      id="paymentNote"
+                      value={paymentNote}
+                      onChange={(e) => setPaymentNote(e.target.value)}
+                      placeholder="Note sur le paiement"
+                      className="w-full"
+                    />
                   </div>
                 </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        await handleAddPayment();
+                        setShowPaymentModal(false);
+                      } catch (error) {
+                        console.error("❌ Error in modal payment:", error);
+                      }
+                    }}
+                    disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+                    className={`flex-1 text-white ${
+                      paymentAmount && parseFloat(paymentAmount) > 0
+                        ? "bg-green-600 hover:bg-green-700 shadow-lg"
+                        : "bg-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {paymentAmount && parseFloat(paymentAmount) > 0
+                      ? "Ajouter le Paiement"
+                      : "Entrez un montant"}
+                  </Button>
+
+                  <Button
+                    onClick={() => {
+                      setShowPaymentModal(false);
+                      setSelectedSale(null);
+                      setPaymentAmount("");
+                      setPaymentNote("");
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Annuler
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

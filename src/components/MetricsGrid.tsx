@@ -60,132 +60,157 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
     });
 
     return (
-      <div
-        className={`grid gap-4 ${className} ${
-          isMobile ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3"
-        }`}
-      >
-        {/* Revenue Card */}
-        <div className="order-1">
-          <MetricCard
-            title="Chiffre d'Affaires"
-            value={`${metrics.revenue.toLocaleString("fr-DZ")} DZD`}
-            color="blue"
-            icon={DollarSign}
-            className="h-full"
-          >
-            <div className="mt-2 space-y-2">
-              {/* Revenue Breakdown */}
-              <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
-                <p className="text-xs text-blue-700 font-medium">
-                  📊 Ventes totales
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
-                  Quantité: {metrics.quantity.toLocaleString("fr-DZ")} unités
-                </p>
+      <div className={`space-y-6 ${className}`}>
+        {/* Section Header */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
+            <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-blue-500 rounded-full"></div>
+            <span>Métriques du Mois</span>
+          </h2>
+          {metrics.virementPeriod &&
+            metrics.virementPeriod !== "mois en cours" && (
+              <div className="hidden sm:flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full">
+                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <span className="text-sm text-purple-700 font-medium">
+                  {metrics.virementPeriod}
+                </span>
               </div>
-
-              {/* Period Information */}
-              {metrics.virementPeriod &&
-                metrics.virementPeriod !== "mois en cours" && (
-                  <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
-                    <p className="text-xs text-purple-700 font-medium">
-                      📅 Période: {metrics.virementPeriod}
-                    </p>
-                    <p className="text-xs text-purple-600 mt-1">
-                      CA calculé sur cette période
-                    </p>
-                  </div>
-                )}
-            </div>
-          </MetricCard>
+            )}
         </div>
 
-        {/* Profit Card */}
-        <div className="order-2">
-          <ProfitMetricCard
-            profit={metrics.profit}
-            virementPeriod={metrics.virementPeriod}
-            onClick={onProfitCardClick}
-          />
-        </div>
-
-        {/* Paid Profit Card */}
-        <div className="order-3">
-          <PaidProfitMetricCard
-            paidProfit={metrics.paidProfit}
-            totalProfit={metrics.profit}
-            virementPeriod={metrics.virementPeriod}
-            onClick={onPaidProfitCardClick}
-          />
-        </div>
-
-        {/* Supplier Payment Card */}
-        <div className="order-4">
-          <MetricCard
-            title="Paiement Fournisseur"
-            value={`${metrics.supplierPayment.toLocaleString("fr-DZ")} DZD`}
-            color="purple"
-            icon={Truck}
-            className="h-full"
-          >
-            <div className="mt-2 space-y-2">
-              {/* Payment Status */}
-              <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
-                <p className="text-xs text-purple-700 font-medium">
-                  💰 Montant à payer
-                </p>
-                <p className="text-xs text-purple-600 mt-1">
-                  Basé sur les ventes effectuées
-                </p>
-              </div>
-
-              {/* Period Information */}
-              {metrics.virementPeriod &&
-                metrics.virementPeriod !== "mois en cours" && (
-                  <div className="bg-indigo-50 rounded-lg p-2 border border-indigo-200">
-                    <p className="text-xs text-indigo-700 font-medium">
-                      📅 Période: {metrics.virementPeriod}
-                    </p>
-                    <p className="text-xs text-indigo-600 mt-1">
-                      Calculé sur cette période
-                    </p>
-                  </div>
-                )}
-            </div>
-          </MetricCard>
-        </div>
-
-        {/* Fragment Stock Card */}
-        <div className="order-5">
-          <MetricCard
-            title="Stock Fragrances"
-            value={`${metrics.fragmentStock.toLocaleString("fr-DZ")} unités`}
-            color="emerald"
-            icon={Package}
-            className="h-full"
-          >
-            <div className="mt-2 space-y-2">
-              {/* Fragment Stock Info */}
-              <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-200">
-                <p className="text-xs text-emerald-700 font-medium">
-                  🌸 Fragrances disponibles
-                </p>
-                <p className="text-xs text-emerald-600 mt-1">
-                  Stock de parfums en détail
-                </p>
-              </div>
-
-              {/* Mobile-specific touch feedback */}
-              {isMobile && (
-                <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full">
-                    <Package className="h-4 w-4 text-emerald-600" />
-                  </div>
+        {/* Metrics Grid */}
+        <div
+          className={`grid gap-6 ${
+            isMobile
+              ? "grid-cols-1 sm:grid-cols-2"
+              : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          }`}
+        >
+          {/* Revenue Card */}
+          <div className="order-1">
+            <MetricCard
+              title="Chiffre d'Affaires"
+              value={`${metrics.revenue.toLocaleString("fr-DZ")} DZD`}
+              color="blue"
+              icon={DollarSign}
+              className="h-full"
+            >
+              <div className="mt-2 space-y-2">
+                {/* Revenue Breakdown */}
+                <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
+                  <p className="text-xs text-blue-700 font-medium">
+                    📊 Ventes totales
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Quantité:{" "}
+                    {Math.floor(metrics.quantity / 9).toLocaleString("fr-DZ")}
+                    cartons
+                  </p>
                 </div>
-              )}
-            </div>
-          </MetricCard>
+
+                {/* Period Information */}
+                {metrics.virementPeriod &&
+                  metrics.virementPeriod !== "mois en cours" && (
+                    <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
+                      <p className="text-xs text-purple-700 font-medium">
+                        📅 Période: {metrics.virementPeriod}
+                      </p>
+                      <p className="text-xs text-purple-600 mt-1">
+                        CA calculé sur cette période
+                      </p>
+                    </div>
+                  )}
+              </div>
+            </MetricCard>
+          </div>
+
+          {/* Profit Card */}
+          <div className="order-2">
+            <ProfitMetricCard
+              profit={metrics.profit}
+              virementPeriod={metrics.virementPeriod}
+              onClick={onProfitCardClick}
+            />
+          </div>
+
+          {/* Paid Profit Card */}
+          <div className="order-3">
+            <PaidProfitMetricCard
+              paidProfit={metrics.paidProfit}
+              virementPeriod={metrics.virementPeriod}
+              onClick={onPaidProfitCardClick}
+            />
+          </div>
+
+          {/* Supplier Payment Card */}
+          <div className="order-4">
+            <MetricCard
+              title="Paiement Fournisseur"
+              value={`${metrics.supplierPayment.toLocaleString("fr-DZ")} DZD`}
+              color="purple"
+              icon={Truck}
+              className="h-full"
+            >
+              <div className="mt-2 space-y-2">
+                {/* Payment Status */}
+                <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
+                  <p className="text-xs text-purple-700 font-medium">
+                    💰 Montant à payer
+                  </p>
+                  <p className="text-xs text-purple-600 mt-1">
+                    Basé sur les ventes effectuées
+                  </p>
+                </div>
+
+                {/* Period Information */}
+                {metrics.virementPeriod &&
+                  metrics.virementPeriod !== "mois en cours" && (
+                    <div className="bg-indigo-50 rounded-lg p-2 border border-indigo-200">
+                      <p className="text-xs text-indigo-700 font-medium">
+                        📅 Période: {metrics.virementPeriod}
+                      </p>
+                      <p className="text-xs text-indigo-600 mt-1">
+                        Calculé sur cette période
+                      </p>
+                    </div>
+                  )}
+              </div>
+            </MetricCard>
+          </div>
+
+          {/* Fragment Stock Card */}
+          <div className="order-5">
+            <MetricCard
+              title="Stock Fragrances"
+              value={`${Math.floor(metrics.fragmentStock / 9).toLocaleString(
+                "fr-DZ"
+              )} cartons`}
+              color="emerald"
+              icon={Package}
+              className="h-full"
+            >
+              <div className="mt-2 space-y-2">
+                {/* Fragment Stock Info */}
+                <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-200">
+                  <p className="text-xs text-emerald-700 font-medium">
+                    🌸 Fragrances disponibles
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-1">
+                    Stock de parfums en détail
+                  </p>
+                </div>
+
+                {/* Mobile-specific touch feedback */}
+                {isMobile && (
+                  <div className="text-center">
+                    <div className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full">
+                      <Package className="h-4 w-4 text-emerald-600" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </MetricCard>
+          </div>
         </div>
       </div>
     );

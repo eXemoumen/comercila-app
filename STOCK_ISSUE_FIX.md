@@ -50,17 +50,17 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   try {
     // Add the sale first
-    console.log("🛒 Adding sale to database...");
+    
     const addedSale = await addSale(sale);
 
     if (!addedSale) {
       throw new Error("Failed to add sale to database");
     }
 
-    console.log("✅ Sale added successfully:", addedSale.id);
+    
 
     // Update stock by removing the sold cartons with fragrance distribution
-    console.log("🔄 Updating stock after sale:", {
+    
       cartons: -cartons,
       fragranceDistribution,
       saleDate,
@@ -75,20 +75,20 @@ const handleSubmit = async (e: React.FormEvent) => {
       fragranceDistribution
     );
 
-    console.log("✅ Stock update result:", stockResult);
+    
 
     // Delete order if it was a pre-filled order
     if (preFillData?.orderId) {
-      console.log("🗑️ Deleting associated order:", preFillData.orderId);
+      
       await deleteOrder(preFillData.orderId);
     }
 
     // Dispatch event to refresh all data
-    console.log("📡 Dispatching saleDataChanged event");
+    
     const event = new CustomEvent("saleDataChanged");
     window.dispatchEvent(event);
 
-    console.log("✅ Sale completed and event dispatched");
+    
 
     // Go back to previous page
     onBack();
@@ -118,10 +118,8 @@ export const updateStock = async (
 ): Promise<number> => {
   await initializeStorage();
 
-  console.log(
-    `🔄 Updating stock: ${quantity} cartons, type: ${type}, reason: ${reason}`
-  );
-  console.log(`📊 Fragrance distribution:`, fragranceDistribution);
+  
+  
 
   if (USE_SUPABASE.stock) {
     try {
@@ -135,9 +133,7 @@ export const updateStock = async (
           ? safeCurrentStock + quantity
           : quantity;
 
-      console.log(
-        `📦 Current stock: ${safeCurrentStock}, New stock: ${newStock}`
-      );
+      
 
       await addSupabaseStockEntry(
         quantity,
@@ -149,33 +145,29 @@ export const updateStock = async (
 
       // Update fragrance stock if distribution provided
       if (fragranceDistribution) {
-        console.log(`🌸 Updating fragrance stock with distribution...`);
+        
         for (const [fragranceId, qty] of Object.entries(
           fragranceDistribution
         )) {
           const adjustedQty =
             type === "adjusted" ? qty : type === "removed" ? -qty : qty;
-          console.log(
-            `  Fragrance ${fragranceId}: ${qty} → ${adjustedQty} (${type})`
-          );
+          
           const result = await updateSupabaseFragranceStock(
             fragranceId,
             adjustedQty
           );
           if (result) {
-            console.log(
-              `  ✅ Updated ${result.name}: ${result.quantity} cartons`
-            );
+            
           } else {
-            console.error(`  ❌ Failed to update fragrance ${fragranceId}`);
+            
           }
         }
       }
 
-      console.log(`✅ Stock update completed. New total: ${newStock}`);
+      
       return newStock;
     } catch (error) {
-      console.error(`❌ Error updating stock:`, error);
+      
       throw error;
     }
   } else {
@@ -192,9 +184,7 @@ export const updateSupabaseFragranceStock = async (
   quantity: number
 ): Promise<FragranceStock | null> => {
   try {
-    console.log(
-      `🌸 Updating fragrance stock: ${fragranceId}, quantity: ${quantity}`
-    );
+    
 
     // First try to update existing
     const { data: existing, error: fetchError } = await supabase
@@ -204,15 +194,13 @@ export const updateSupabaseFragranceStock = async (
       .single();
 
     if (fetchError && fetchError.code !== "PGRST116") {
-      console.error("Error fetching existing fragrance stock:", fetchError);
+      
       return null;
     }
 
     if (existing) {
       const newQuantity = existing.quantity + quantity;
-      console.log(
-        `  Existing: ${existing.quantity} + ${quantity} = ${newQuantity}`
-      );
+      
 
       const { data, error } = await supabase
         .from("fragrance_stock")
@@ -225,11 +213,11 @@ export const updateSupabaseFragranceStock = async (
         .single();
 
       if (error) {
-        console.error("Error updating fragrance stock:", error);
+        
         return null;
       }
 
-      console.log(`  ✅ Updated ${data.name}: ${newQuantity} cartons`);
+      
       return {
         fragranceId: data.fragrance_id,
         name: data.name,
@@ -241,10 +229,7 @@ export const updateSupabaseFragranceStock = async (
       // ... implementation for creating new records
     }
   } catch (error) {
-    console.error(
-      `❌ Error in updateSupabaseFragranceStock for ${fragranceId}:`,
-      error
-    );
+    
     return null;
   }
 };
@@ -323,4 +308,5 @@ After implementing the fix:
 4. Test error scenarios (network issues, invalid data, etc.)
 
 The fix ensures that sales and stock updates are atomic - either both succeed or both fail, preventing the stock from getting out of sync with sales data.
+
 

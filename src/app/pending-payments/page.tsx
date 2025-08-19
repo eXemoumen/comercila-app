@@ -23,8 +23,6 @@ export default function PendingPaymentsPage() {
 
   const createSampleData = async () => {
     try {
-      console.log("🔄 Creating sample data in Supabase...");
-
       // First, create a sample supermarket
       const { data: supermarket, error: supermarketError } = await supabase
         .from("supermarkets")
@@ -40,14 +38,11 @@ export default function PendingPaymentsPage() {
         .single();
 
       if (supermarketError) {
-        console.error("❌ Error creating supermarket:", supermarketError);
         return;
       }
 
-      console.log("✅ Sample supermarket created:", supermarket);
-
       // Then, create a sample unpaid sale
-      const { data: sale, error: saleError } = await supabase
+      const { error: saleError } = await supabase
         .from("sales")
         .insert([
           {
@@ -67,11 +62,8 @@ export default function PendingPaymentsPage() {
         .single();
 
       if (saleError) {
-        console.error("❌ Error creating sale:", saleError);
         return;
       }
-
-      console.log("✅ Sample sale created:", sale);
 
       // Reload the data
       const loadData = async () => {
@@ -84,84 +76,43 @@ export default function PendingPaymentsPage() {
       };
 
       await loadData();
-    } catch (error) {
-      console.error("Error creating sample data:", error);
+    } catch (err) {
+      console.error("Error creating sample data:", err);
     }
   };
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        console.log("🔄 Loading virements data from Supabase...");
-
         // Test Supabase connection first
-        console.log("🔍 Testing Supabase connection...");
+
         const { error: testError } = await supabase
           .from("sales")
           .select("count")
           .limit(1);
 
         if (testError) {
-          console.error("❌ Supabase connection error:", testError);
         } else {
-          console.log("✅ Supabase connection successful");
         }
 
         // Use hybrid storage functions (which use Supabase)
         const allSales = await getSales();
-        console.log(
-          "📊 Sales loaded from Supabase:",
-          allSales.length,
-          "records"
-        );
-        console.log(
-          "📊 Sales data details:",
-          allSales.map((sale) => ({
-            id: sale.id,
-            supermarketId: sale.supermarketId,
-            totalValue: sale.totalValue,
-            isPaid: sale.isPaid,
-            remainingAmount: sale.remainingAmount,
-            date: sale.date,
-          }))
-        );
 
         const unpaidSales = allSales.filter((sale) => !sale.isPaid);
-        console.log(
-          "💰 Unpaid sales (virements):",
-          unpaidSales.length,
-          "records"
-        );
 
         // If no data exists, offer to create sample data
         if (allSales.length === 0) {
-          console.log(
-            "📝 No sales data found. You can create sample data for testing."
-          );
         }
 
         setPendingSales(unpaidSales);
 
         const allSupermarkets = await getSupermarkets();
-        console.log(
-          "🏪 Supermarkets loaded from Supabase:",
-          allSupermarkets.length,
-          "records"
-        );
-        console.log(
-          "🏪 Supermarkets details:",
-          allSupermarkets.map((sm) => ({
-            id: sm.id,
-            name: sm.name,
-            address: sm.address,
-          }))
-        );
 
         setSupermarkets(allSupermarkets);
 
         setIsLoading(false);
-      } catch (error) {
-        console.error("Error loading virements data from Supabase:", error);
+      } catch (err) {
+        console.error("Error loading data:", err);
         setPendingSales([]);
         setSupermarkets([]);
         setIsLoading(false);
@@ -169,6 +120,17 @@ export default function PendingPaymentsPage() {
     };
 
     loadData();
+
+    // Listen for data changes from other components
+    const handleDataChange = () => {
+      loadData();
+    };
+
+    window.addEventListener("saleDataChanged", handleDataChange);
+
+    return () => {
+      window.removeEventListener("saleDataChanged", handleDataChange);
+    };
   }, []);
 
   // Calculate total remaining amount safely
@@ -191,10 +153,14 @@ export default function PendingPaymentsPage() {
         amount: paymentAmount,
         date: new Date().toISOString(),
         note: paymentNote,
+        type: "virement", // Mark as virement payment
       };
 
       await addPayment(selectedSale.id, payment);
-      console.log("✅ Payment added successfully");
+
+      // Dispatch event to notify other components about the data change
+      const event = new CustomEvent("saleDataChanged");
+      window.dispatchEvent(event);
 
       // Refresh data
       const allSales = await getSales();
@@ -206,8 +172,8 @@ export default function PendingPaymentsPage() {
       setPaymentAmount(0);
       setPaymentNote("");
       setShowPaymentModal(false);
-    } catch (error) {
-      console.error("Error adding payment:", error);
+    } catch (err) {
+      console.error("Error processing payment:", err);
     }
   };
 

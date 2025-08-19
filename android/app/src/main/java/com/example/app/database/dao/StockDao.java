@@ -47,3 +47,4 @@ public interface StockDao {
     int getPendingSyncCount();
 }
 
+

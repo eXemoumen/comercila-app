@@ -136,7 +136,6 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
 
     // Prevent double submission
     if (isSubmitting) {
-      console.log("⏳ Form submission already in progress...");
       return;
     }
 
@@ -203,6 +202,7 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                   : new Date().toISOString(),
                 amount: totalValue,
                 note: "Paiement complet",
+                type: "direct",
               },
             ]
           : [],
@@ -211,23 +211,15 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       };
 
       // Add the sale first
-      console.log("🛒 Adding sale to database...");
+
       const addedSale = await addSale(sale);
 
       if (!addedSale) {
         throw new Error("Failed to add sale to database");
       }
 
-      console.log("✅ Sale added successfully:", addedSale.id);
-
       // Update stock by removing the sold cartons with fragrance distribution
-      console.log("🔄 Updating stock after sale:", {
-        cartons: -cartons,
-        fragranceDistribution,
-        saleDate,
-      });
-
-      const stockResult = await updateStock(
+      await updateStock(
         -cartons,
         "removed",
         `Vente de ${cartons} cartons (${quantity} pièces) - ${new Date(
@@ -236,20 +228,15 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         fragranceDistribution
       );
 
-      console.log("✅ Stock update result:", stockResult);
-
       // Delete order if it was a pre-filled order
       if (preFillData?.orderId) {
-        console.log("🗑️ Deleting associated order:", preFillData.orderId);
         await deleteOrder(preFillData.orderId);
       }
 
       // Dispatch event to refresh all data
-      console.log("📡 Dispatching saleDataChanged event");
+
       const event = new CustomEvent("saleDataChanged");
       window.dispatchEvent(event);
-
-      console.log("✅ Sale completed and event dispatched");
 
       // Go back to previous page
       onBack();

@@ -53,7 +53,6 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
       setIsMobile(mobile);
 
       if (isAndroid() && mobile) {
-        console.log("🤖 Android mobile detected - applying optimizations");
         mobileUtils.optimizeForVirements();
       }
     };
@@ -64,6 +63,16 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
+
+  // Debug: Log the data being received
+  console.log({
+    type,
+    title,
+    monthlyBenefitsKeys: Object.keys(monthlyBenefits),
+    monthlyBenefitsValues: Object.values(monthlyBenefits),
+    totalEntries: Object.entries(monthlyBenefits).length,
+    salesCount: sales.length,
+  });
 
   // Sort months by date (newest first)
   const sortedMonths = Object.entries(monthlyBenefits).sort(([, a], [, b]) => {
@@ -466,6 +475,7 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
           monthData={monthlyBenefits[selectedMonth]}
           sales={sales}
           virementPeriod={virementPeriod}
+          type={type === "paid" ? "real" : "estimated"}
         />
       )}
     </>

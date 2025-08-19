@@ -58,13 +58,13 @@ public void onCreate(Bundle savedInstanceState) {
 private setupNotificationListeners(): void {
   // Listen for notification received while app is in foreground
   LocalNotifications.addListener('localNotificationReceived', (notification) => {
-    console.log('Notification received:', notification);
+    
     this.handleNotificationReceived(notification);
   });
 
   // Listen for notification action clicked
   LocalNotifications.addListener('localNotificationActionPerformed', (notificationAction) => {
-    console.log('Notification action performed:', notificationAction);
+    
     this.handleNotificationAction(notificationAction);
   });
 }

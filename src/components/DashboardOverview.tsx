@@ -50,9 +50,13 @@ export interface DashboardData {
 }
 
 export interface DashboardOverviewProps {
-  dashboardData: DashboardData;
-  monthlyBenefits: Record<string, MonthlyData>;
-  onNavigate?: (tab: string) => void;
+  dashboardData: {
+    monthlySales: MonthlySalesData;
+    salesData: Array<{ name: string; value: number }>;
+    fragranceStock: Array<{ name: string; value: number; color: string }>;
+  };
+  monthlyBenefits: Record<string, MonthlyData>; // Estimated benefits
+  monthlyPaidBenefits: Record<string, MonthlyData>; // Real benefits
   isLoading?: boolean;
   error?: string | null;
   className?: string;
@@ -62,6 +66,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
   function DashboardOverview({
     dashboardData,
     monthlyBenefits,
+    monthlyPaidBenefits,
     isLoading = false,
     error = null,
     className = "",
@@ -162,24 +167,42 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
         </section>
 
         {/* Charts and Analytics Section */}
-        <section aria-labelledby="analytics-heading">
-          <h2 id="analytics-heading" className="sr-only">
-            Analyses et graphiques
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Monthly Benefits Chart */}
-            <ChartErrorBoundary title="Bénéfices Mensuels">
-              <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                <div className="p-4 border-b">
-                  <h3 className="text-sm font-medium text-gray-700">
-                    Bénéfices Mensuels (6 derniers mois)
-                  </h3>
+        <section aria-labelledby="analytics-heading" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
+              <div className="w-1 h-8 bg-gradient-to-b from-blue-500 to-green-500 rounded-full"></div>
+              <span>Analyses et Graphiques</span>
+            </h2>
+            <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-500">
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span>Estimé</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span>Réel</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {/* Estimated Benefits Chart */}
+            <ChartErrorBoundary title="Bénéfices Estimés">
+              <div className="bg-gradient-to-br from-white to-green-50 rounded-xl shadow-lg border border-green-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+                <div className="bg-gradient-to-r from-green-500 to-green-600 p-4 text-white">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                    <h3 className="font-semibold">Bénéfices Estimés</h3>
+                  </div>
+                  <p className="text-green-100 text-sm mt-1">
+                    📅 Basé sur la date de vente (6 derniers mois)
+                  </p>
                 </div>
                 <div className="p-4">
                   <Suspense
                     fallback={
                       <div className="flex items-center justify-center h-[200px]">
-                        <div className="animate-pulse bg-gray-200 rounded w-full h-full"></div>
+                        <div className="animate-pulse bg-gradient-to-r from-green-200 to-green-300 rounded w-full h-full"></div>
                       </div>
                     }
                   >
@@ -187,6 +210,38 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
                       data={monthlyBenefits}
                       height={200}
                       currentMonthProfit={dashboardData.monthlySales.profit}
+                      type="estimated"
+                    />
+                  </Suspense>
+                </div>
+              </div>
+            </ChartErrorBoundary>
+
+            {/* Real Benefits Chart */}
+            <ChartErrorBoundary title="Bénéfices Réels">
+              <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg border border-blue-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                    <h3 className="font-semibold">Bénéfices Réels</h3>
+                  </div>
+                  <p className="text-blue-100 text-sm mt-1">
+                    💰 Basé sur la date de paiement (6 derniers mois)
+                  </p>
+                </div>
+                <div className="p-4">
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center h-[200px]">
+                        <div className="animate-pulse bg-gradient-to-r from-blue-200 to-blue-300 rounded w-full h-full"></div>
+                      </div>
+                    }
+                  >
+                    <MonthlyBenefitsChart
+                      data={monthlyPaidBenefits}
+                      height={200}
+                      currentMonthProfit={dashboardData.monthlySales.paidProfit}
+                      type="real"
                     />
                   </Suspense>
                 </div>
@@ -195,17 +250,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
 
             {/* Fragrance Stock Distribution */}
             <ChartErrorBoundary title="Distribution du Stock">
-              <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                <div className="p-4 border-b">
-                  <h3 className="text-sm font-medium text-gray-700">
-                    Distribution du Stock par Parfum
-                  </h3>
+              <div className="bg-gradient-to-br from-white to-purple-50 rounded-xl shadow-lg border border-purple-100 overflow-hidden hover:shadow-xl transition-all duration-300 lg:col-span-2 xl:col-span-1">
+                <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-4 text-white">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                    <h3 className="font-semibold">Distribution du Stock</h3>
+                  </div>
+                  <p className="text-purple-100 text-sm mt-1">
+                    📦 Répartition par parfum
+                  </p>
                 </div>
                 <div className="p-4">
                   <Suspense
                     fallback={
                       <div className="flex items-center justify-center h-[250px]">
-                        <div className="animate-pulse bg-gray-200 rounded-full w-32 h-32"></div>
+                        <div className="animate-pulse bg-gradient-to-r from-purple-200 to-purple-300 rounded-full w-32 h-32"></div>
                       </div>
                     }
                   >
@@ -218,28 +277,50 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
                 </div>
               </div>
             </ChartErrorBoundary>
+          </div>
 
-            {/* Monthly History Table */}
+          {/* Monthly History Table - Full Width */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
+                <div className="w-1 h-6 bg-gradient-to-b from-indigo-500 to-purple-500 rounded-full"></div>
+                <span>Historique Mensuel Comparatif</span>
+              </h3>
+              <div className="hidden sm:flex items-center space-x-3 text-sm">
+                <div className="flex items-center space-x-1 bg-green-50 px-2 py-1 rounded-full">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-green-700 font-medium">Estimé</span>
+                </div>
+                <div className="flex items-center space-x-1 bg-blue-50 px-2 py-1 rounded-full">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-blue-700 font-medium">Réel</span>
+                </div>
+              </div>
+            </div>
+
             <ChartErrorBoundary title="Historique Mensuel">
-              <div className="lg:col-span-1">
+              <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg border border-gray-100 overflow-hidden">
                 <Suspense
                   fallback={
-                    <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                      <div className="p-4 border-b">
-                        <div className="animate-pulse bg-gray-200 rounded h-4 w-32"></div>
-                      </div>
-                      <div className="p-4 space-y-3">
-                        {[...Array(4)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="animate-pulse bg-gray-200 rounded h-8 w-full"
-                          ></div>
-                        ))}
+                    <div className="p-6">
+                      <div className="animate-pulse space-y-4">
+                        <div className="bg-gradient-to-r from-gray-200 to-gray-300 rounded h-6 w-48"></div>
+                        <div className="space-y-3">
+                          {[...Array(4)].map((_, i) => (
+                            <div
+                              key={i}
+                              className="bg-gradient-to-r from-gray-200 to-gray-300 rounded h-12 w-full"
+                            ></div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   }
                 >
-                  <MonthlyHistoryTable monthlyBenefits={monthlyBenefits} />
+                  <MonthlyHistoryTable
+                    monthlyBenefits={monthlyBenefits}
+                    monthlyPaidBenefits={monthlyPaidBenefits}
+                  />
                 </Suspense>
               </div>
             </ChartErrorBoundary>
@@ -262,7 +343,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
         <MonthlyBreakdownModal
           isOpen={showPaidModal}
           onClose={() => setShowPaidModal(false)}
-          monthlyBenefits={monthlyBenefits}
+          monthlyBenefits={monthlyPaidBenefits}
           title={`Bénéfice Réel (Payé) - ${
             dashboardData.monthlySales.virementPeriod || "mois en cours"
           }`}

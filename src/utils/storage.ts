@@ -73,6 +73,7 @@ export interface Payment {
   date: string;
   amount: number;
   note?: string;
+  type?: 'virement' | 'direct' | 'other'; // Payment type to track virement payments
 }
 
 // Storage Keys
@@ -118,11 +119,12 @@ export const getSales = async (): Promise<Sale[]> => {
     paymentDate: s.payment_date,
     paymentNote: s.payment_note,
     expectedPaymentDate: s.expected_payment_date,
-    payments: s.payments?.map((p: { id: string; date: string; amount: number; note: string }) => ({
+    payments: s.payments?.map((p: { id: string; date: string; amount: number; note: string; type?: string }) => ({
       id: p.id,
       date: p.date,
       amount: p.amount,
-      note: p.note
+      note: p.note,
+      type: p.type || 'other'
     })) || [],
     remainingAmount: s.remaining_amount,
     fromOrder: s.from_order,
@@ -169,7 +171,8 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
       sale_id: newSale.id,
       date: payment.date,
       amount: payment.amount,
-      note: payment.note || null
+      note: payment.note || null,
+      type: payment.type || 'other'
     }));
 
     await supabase.from("payments").insert(payments);
@@ -566,16 +569,36 @@ export const completeOrder = async (orderId: string): Promise<Order | null> => {
 };
 
 // Add function to update payment status
-export const updateSalePayment = async (saleId: string, isPaid: boolean): Promise<Sale | null> => {
+export const updateSalePayment = async (saleId: string, isPaid: boolean, paymentDate?: string): Promise<Sale | null> => {
   const { supabase } = await import("@/lib/supabase");
+  
+  // First get the current sale to calculate remaining amount
+  const { data: currentSale, error: fetchError } = await supabase
+    .from("sales")
+    .select("total_value, remaining_amount")
+    .eq("id", saleId)
+    .single();
+
+  if (fetchError) {
+    console.error("Error fetching current sale:", fetchError);
+    return null;
+  }
+
+  // Calculate new remaining amount
+  const newRemainingAmount = isPaid ? 0 : currentSale.total_value;
+
   const { data, error } = await supabase
     .from("sales")
     .update({
       is_paid: isPaid,
-      payment_date: isPaid ? new Date().toISOString() : null
+      payment_date: isPaid ? (paymentDate || new Date().toISOString()) : null, // Use provided payment date or current date
+      remaining_amount: newRemainingAmount
     })
     .eq("id", saleId)
-    .select()
+    .select(`
+      *,
+      payments (*)
+    `)
     .single();
 
   if (error) {
@@ -595,7 +618,12 @@ export const updateSalePayment = async (saleId: string, isPaid: boolean): Promis
     paymentDate: data.payment_date,
     paymentNote: data.payment_note,
     expectedPaymentDate: data.expected_payment_date,
-    payments: [], // Will need to fetch separately if needed
+    payments: data.payments?.map((p: { id: string; date: string; amount: number; note: string }) => ({
+      id: p.id,
+      date: p.date,
+      amount: p.amount,
+      note: p.note
+    })) || [],
     remainingAmount: data.remaining_amount,
     fromOrder: data.from_order,
     note: data.note,
@@ -610,7 +638,8 @@ export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): 
     sale_id: saleId,
     date: payment.date,
     amount: payment.amount,
-    note: payment.note || null
+    note: payment.note || null,
+    type: payment.type || 'other'
   };
 
   const { error: paymentError } = await supabase
@@ -638,7 +667,7 @@ export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): 
       .update({
         remaining_amount: newRemainingAmount,
         is_paid: isPaid,
-        payment_date: isPaid ? new Date().toISOString() : null
+        payment_date: isPaid ? payment.date : null
       })
       .eq("id", saleId)
       .select(`
@@ -664,11 +693,12 @@ export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): 
       paymentDate: data.payment_date,
       paymentNote: data.payment_note,
       expectedPaymentDate: data.expected_payment_date,
-      payments: data.payments?.map((p: { id: string; date: string; amount: number; note: string }) => ({
+      payments: data.payments?.map((p: { id: string; date: string; amount: number; note: string; type?: string }) => ({
         id: p.id,
         date: p.date,
         amount: p.amount,
-        note: p.note
+        note: p.note,
+        type: p.type || 'other'
       })) || [],
       remainingAmount: data.remaining_amount,
       fromOrder: data.from_order,

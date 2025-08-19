@@ -4,6 +4,7 @@ import {
     getCurrentStock,
     getFragranceStock,
 } from "@/utils/hybridStorage";
+import { calculateMonthlyBenefits, calculateMonthlyPaidBenefits, calculateMonthlySales } from "@/utils/dashboardCalculations";
 
 interface MonthlySalesData {
     quantity: number;
@@ -28,8 +29,13 @@ interface DashboardData {
 }
 
 interface UseDashboardDataReturn {
-    dashboardData: DashboardData;
-    monthlyBenefits: Record<string, MonthlyData>;
+    dashboardData: {
+        monthlySales: MonthlySalesData;
+        salesData: Array<{ name: string; value: number }>;
+        fragranceStock: Array<{ name: string; value: number; color: string }>;
+    };
+    monthlyBenefits: Record<string, MonthlyData>; // Estimated benefits (based on sale date)
+    monthlyPaidBenefits: Record<string, MonthlyData>; // Real benefits (based on payment date)
     isLoading: boolean;
     error: string | null;
     refreshData: () => Promise<void>;
@@ -67,6 +73,7 @@ export function useDashboardData(): UseDashboardDataReturn {
     });
 
     const [monthlyBenefits, setMonthlyBenefits] = useState<Record<string, MonthlyData>>({});
+    const [monthlyPaidBenefits, setMonthlyPaidBenefits] = useState<Record<string, MonthlyData>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -77,56 +84,10 @@ export function useDashboardData(): UseDashboardDataReturn {
 
             // Get current month's sales
             const allSales = await getSales();
-            const currentDate = new Date();
-            const currentMonth = currentDate.getMonth();
-            const currentYear = currentDate.getFullYear();
-
-            const monthlySales = allSales.filter((sale) => {
-                const saleDate = new Date(sale.date);
-                return (
-                    saleDate.getMonth() === currentMonth &&
-                    saleDate.getFullYear() === currentYear
-                );
-            });
-
-            // Calculate monthly statistics
-            const totalQuantity = monthlySales.reduce(
-                (acc, sale) => acc + sale.quantity,
-                0
-            );
-            const totalRevenue = monthlySales.reduce(
-                (acc, sale) => acc + sale.totalValue,
-                0
-            );
-
-            // Calculate profit based on the actual pricePerUnit from sales
-            const totalProfit = monthlySales.reduce((acc, sale) => {
-                // Determine benefit per unit based on sale price
-                const benefitPerUnit =
-                    sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-                return acc + sale.quantity * benefitPerUnit;
-            }, 0);
-
-            // Calculate profit from paid sales only
-            const paidProfit = monthlySales.reduce((acc, sale) => {
-                if (sale.isPaid) {
-                    // Only include paid sales
-                    const benefitPerUnit =
-                        sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-                    return acc + sale.quantity * benefitPerUnit;
-                }
-                return acc;
-            }, 0);
-
-            // Calculate supplier payment amount
-            const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
-                // Determine supplier cost per unit based on sale price
-                const supplierCostPerUnit =
-                    sale.pricePerUnit === 180 ? 155 : sale.pricePerUnit === 166 ? 149 : 0;
-                return acc + sale.quantity * supplierCostPerUnit;
-            }, 0);
-
-            const { currentStock } = await getCurrentStock();
+            
+            // Use the proper calculation function from dashboardCalculations
+            const { currentStock, fragranceStock: fragmentStock } = await getCurrentStock();
+            const monthlySalesData = calculateMonthlySales(allSales, currentStock);
 
             // Get fragrance stock data for the pie chart
             const fragranceStock = await getFragranceStock();
@@ -162,13 +123,13 @@ export function useDashboardData(): UseDashboardDataReturn {
 
             setDashboardData({
                 monthlySales: {
-                    quantity: totalQuantity,
-                    revenue: totalRevenue,
-                    profit: totalProfit,
-                    stock: currentStock * 9, // Convert cartons to units
-                    supplierPayment: totalSupplierPayment,
-                    paidProfit: paidProfit,
-                    fragmentStock: currentStock * 9 // Use current stock instead of fragment stock
+                    quantity: monthlySalesData.quantity,
+                    revenue: monthlySalesData.revenue,
+                    profit: monthlySalesData.profit,
+                    stock: monthlySalesData.stock,
+                    supplierPayment: monthlySalesData.supplierPayment,
+                    paidProfit: monthlySalesData.paidProfit,
+                    fragmentStock: fragmentStock
                 },
                 salesData,
                 fragranceStock: fragranceData,
@@ -180,39 +141,28 @@ export function useDashboardData(): UseDashboardDataReturn {
     }, []);
 
     // Calculate monthly benefits data
-    const calculateMonthlyBenefits = useCallback(async () => {
+    const calculateMonthlyBenefitsData = useCallback(async () => {
         try {
             const allSales = await getSales();
-            const monthlyData: Record<string, MonthlyData> = {};
-
-            allSales.forEach((sale) => {
-                const date = new Date(sale.date);
-                // Format the month and year in French with proper capitalization
-                let monthYear = date.toLocaleDateString("fr-FR", {
-                    month: "long",
-                    year: "numeric",
-                });
-
-                // Capitalize the first letter of the month
-                monthYear = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
-
-                if (!monthlyData[monthYear]) {
-                    monthlyData[monthYear] = {
-                        quantity: 0,
-                        value: 0,
-                        netBenefit: 0,
-                    };
-                }
-
-                const benefitPerUnit =
-                    sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-
-                monthlyData[monthYear].quantity += sale.quantity;
-                monthlyData[monthYear].value += sale.totalValue;
-                monthlyData[monthYear].netBenefit += sale.quantity * benefitPerUnit;
+            
+            console.log("🔍 calculateMonthlyBenefitsData Debug:", {
+                totalSales: allSales.length,
+                salesWithDates: allSales.map(sale => ({
+                    id: sale.id,
+                    date: sale.date,
+                    totalValue: sale.totalValue
+                }))
             });
-
-            setMonthlyBenefits(monthlyData);
+            
+            // Calculate estimated benefits (based on sale date)
+            const estimatedBenefits = calculateMonthlyBenefits(allSales);
+            console.log("📊 Estimated Benefits:", estimatedBenefits);
+            setMonthlyBenefits(estimatedBenefits);
+            
+            // Calculate real benefits (based on payment date)
+            const paidBenefits = calculateMonthlyPaidBenefits(allSales);
+            console.log("💰 Paid Benefits:", paidBenefits);
+            setMonthlyPaidBenefits(paidBenefits);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to calculate monthly benefits");
             console.error("Error calculating monthly benefits:", err);
@@ -223,11 +173,11 @@ export function useDashboardData(): UseDashboardDataReturn {
     const refreshData = useCallback(async () => {
         setIsLoading(true);
         try {
-            await Promise.all([updateDashboardData(), calculateMonthlyBenefits()]);
+            await Promise.all([updateDashboardData(), calculateMonthlyBenefitsData()]);
         } finally {
             setIsLoading(false);
         }
-    }, [updateDashboardData, calculateMonthlyBenefits]);
+    }, [updateDashboardData, calculateMonthlyBenefitsData]);
 
     // Initial data load and setup
     useEffect(() => {
@@ -241,7 +191,7 @@ export function useDashboardData(): UseDashboardDataReturn {
         // Add event listener for saleDataChanged event
         const handleSaleDataChanged = async () => {
             await updateDashboardData();
-            await calculateMonthlyBenefits();
+            await calculateMonthlyBenefitsData();
         };
 
         window.addEventListener("saleDataChanged", handleSaleDataChanged);
@@ -251,11 +201,12 @@ export function useDashboardData(): UseDashboardDataReturn {
             clearInterval(interval);
             window.removeEventListener("saleDataChanged", handleSaleDataChanged);
         };
-    }, [updateDashboardData, calculateMonthlyBenefits, refreshData]);
+    }, [updateDashboardData, calculateMonthlyBenefitsData, refreshData]);
 
     return {
         dashboardData,
         monthlyBenefits,
+        monthlyPaidBenefits,
         isLoading,
         error,
         refreshData,
