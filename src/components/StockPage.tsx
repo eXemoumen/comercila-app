@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Plus, Minus, Settings, X } from "lucide-react";
+import { ChevronLeft, Plus, Minus, Settings, X, History } from "lucide-react";
 import {
   getStockHistory,
   updateStock,
@@ -34,6 +34,7 @@ export function StockPage({ onBack }: StockPageProps) {
   const [currentStock, setCurrentStock] = useState<number>(0);
   const [fragranceStock, setFragranceStock] = useState<FragranceStock[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(true);
 
   // Add stock form state
   const [addQuantity, setAddQuantity] = useState<number>(0);
@@ -51,8 +52,9 @@ export function StockPage({ onBack }: StockPageProps) {
   // Function to load stock data
   const loadStockData = useCallback(async () => {
     try {
+      setIsHistoryLoading(true);
       const [history, currentStockData, fragStock] = await Promise.all([
-        getStockHistory(),
+        getStockHistory(3), // Only fetch last 3 history entries
         getCurrentStock(),
         getFragranceStock(),
       ]);
@@ -77,6 +79,8 @@ export function StockPage({ onBack }: StockPageProps) {
       setAdjustFragranceDistribution(initialDistribution);
     } catch (error) {
       console.error("Error loading stock data:", error);
+    } finally {
+      setIsHistoryLoading(false);
     }
   }, []);
 
@@ -85,27 +89,42 @@ export function StockPage({ onBack }: StockPageProps) {
     loadStockData();
   }, [loadStockData]);
 
+  // Memoized calculations
+  const addDistributionTotal = useMemo(() => {
+    return Object.values(fragranceDistribution).reduce(
+      (sum, qty) => sum + qty,
+      0
+    );
+  }, [fragranceDistribution]);
+
+  const adjustDistributionTotal = useMemo(() => {
+    return Object.values(adjustFragranceDistribution).reduce(
+      (sum, qty) => sum + qty,
+      0
+    );
+  }, [adjustFragranceDistribution]);
+
   // Handle fragrance change for add form
-  const handleAddFragranceChange = (
-    fragranceId: string,
-    value: number
-  ): void => {
-    setFragranceDistribution((prev) => ({
-      ...prev,
-      [fragranceId]: Math.max(0, value),
-    }));
-  };
+  const handleAddFragranceChange = useCallback(
+    (fragranceId: string, value: number): void => {
+      setFragranceDistribution((prev) => ({
+        ...prev,
+        [fragranceId]: Math.max(0, value),
+      }));
+    },
+    []
+  );
 
   // Handle fragrance change for adjust form
-  const handleAdjustFragranceChange = (
-    fragranceId: string,
-    value: number
-  ): void => {
-    setAdjustFragranceDistribution((prev) => ({
-      ...prev,
-      [fragranceId]: Math.max(0, value),
-    }));
-  };
+  const handleAdjustFragranceChange = useCallback(
+    (fragranceId: string, value: number): void => {
+      setAdjustFragranceDistribution((prev) => ({
+        ...prev,
+        [fragranceId]: Math.max(0, value),
+      }));
+    },
+    []
+  );
 
   // Add stock function
   const handleAddStock = async (e: React.FormEvent): Promise<void> => {
@@ -121,13 +140,9 @@ export function StockPage({ onBack }: StockPageProps) {
 
       // If fragrance distribution is enabled, validate it
       if (showFragranceDistribution) {
-        const totalDistributed = Object.values(fragranceDistribution).reduce(
-          (sum, qty) => sum + qty,
-          0
-        );
-        if (totalDistributed !== addQuantity) {
+        if (addDistributionTotal !== addQuantity) {
           alert(
-            `La distribution des parfums (${totalDistributed} cartons) doit correspondre exactement au total à ajouter (${addQuantity} cartons).`
+            `La distribution des parfums (${addDistributionTotal} cartons) doit correspondre exactement au total à ajouter (${addQuantity} cartons).`
           );
           return;
         }
@@ -409,7 +424,7 @@ export function StockPage({ onBack }: StockPageProps) {
                       setShowFragranceDistribution(!showFragranceDistribution)
                     }
                   >
-                    {showFragranceDistribution ? "Activé" : "Activé"}
+                    {showFragranceDistribution ? "Activé" : "Désactivé"}
                   </Button>
                 </div>
               )}
@@ -479,13 +494,19 @@ export function StockPage({ onBack }: StockPageProps) {
                       </div>
                     ))}
                   </div>
-                  <div className="text-sm text-green-600">
-                    Total:{" "}
-                    {Object.values(fragranceDistribution).reduce(
-                      (sum, qty) => sum + qty,
-                      0
-                    )}{" "}
-                    / {addQuantity} cartons
+                  <div
+                    className={`text-sm ${
+                      addDistributionTotal === addQuantity
+                        ? "text-green-600"
+                        : "text-red-500"
+                    }`}
+                  >
+                    Total: {addDistributionTotal} / {addQuantity} cartons
+                    {addDistributionTotal !== addQuantity && (
+                      <span className="block text-xs text-red-400 mt-1">
+                        ⚠️ La distribution doit égaler {addQuantity} cartons
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -494,7 +515,12 @@ export function StockPage({ onBack }: StockPageProps) {
               <div className="flex space-x-3">
                 <Button
                   type="submit"
-                  disabled={isLoading || addQuantity <= 0}
+                  disabled={
+                    isLoading ||
+                    addQuantity <= 0 ||
+                    (showFragranceDistribution &&
+                      addDistributionTotal !== addQuantity)
+                  }
                   className="flex-1 h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-medium shadow-md disabled:opacity-50"
                 >
                   {isLoading ? "Ajout en cours..." : "Ajouter le Stock"}
@@ -664,13 +690,19 @@ export function StockPage({ onBack }: StockPageProps) {
                     </div>
                   ))}
                 </div>
-                <div className="text-sm text-purple-600">
-                  Total:{" "}
-                  {Object.values(adjustFragranceDistribution).reduce(
-                    (sum, qty) => sum + qty,
-                    0
-                  )}{" "}
-                  / {adjustQuantity} cartons
+                <div
+                  className={`text-sm ${
+                    adjustDistributionTotal === adjustQuantity
+                      ? "text-purple-600"
+                      : "text-red-500"
+                  }`}
+                >
+                  Total: {adjustDistributionTotal} / {adjustQuantity} cartons
+                  {adjustDistributionTotal !== adjustQuantity && (
+                    <span className="block text-xs text-red-400 mt-1">
+                      ⚠️ La distribution doit égaler {adjustQuantity} cartons
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -678,7 +710,9 @@ export function StockPage({ onBack }: StockPageProps) {
               <div className="flex space-x-3">
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={
+                    isLoading || adjustDistributionTotal !== adjustQuantity
+                  }
                   className="flex-1 h-12 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium shadow-md disabled:opacity-50"
                 >
                   {isLoading ? "Ajustement en cours..." : "Ajuster le Stock"}
@@ -699,14 +733,46 @@ export function StockPage({ onBack }: StockPageProps) {
 
       {/* Stock History */}
       <div className="mt-8">
-        <h2 className="text-lg font-semibold text-gray-800 mb-3">
-          Historique des Mouvements
-        </h2>
-        <div className="space-y-3">
-          {stockHistory
-            .slice()
-            .reverse()
-            .map((item) => (
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-800 flex items-center">
+            <History className="mr-2 h-5 w-5 text-gray-600" />
+            Historique des Mouvements
+          </h2>
+          <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+            3 dernières actions
+          </span>
+        </div>
+
+        {isHistoryLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse">
+                <div className="flex flex-col p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-24"></div>
+                      <div className="h-3 bg-gray-200 rounded w-16"></div>
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <div className="h-4 bg-gray-200 rounded w-20"></div>
+                      <div className="h-3 bg-gray-200 rounded w-24"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : stockHistory.length === 0 ? (
+          <div className="text-center py-8">
+            <History className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+            <p className="text-gray-500">Aucun historique disponible</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Les mouvements de stock apparaîtront ici
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {stockHistory.map((item) => (
               <div
                 key={item.id}
                 className="flex flex-col p-4 bg-white border border-gray-200 rounded-xl shadow-sm"
@@ -788,7 +854,8 @@ export function StockPage({ onBack }: StockPageProps) {
                 )}
               </div>
             ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -295,7 +295,13 @@ export function calculatePaidProfit(allSales: Sale[], month?: number, year?: num
  * @param allSales - Array of all sales
  * @returns Debug information about paid profit calculation
  */
-export function debugPaidProfitCalculation(allSales: Sale[]): any {
+export function debugPaidProfitCalculation(allSales: Sale[]): {
+  currentMonth: number;
+  currentYear: number;
+  totalPaidSales: number;
+  currentMonthPaidSales: number;
+  totalPaidProfit: number;
+} {
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();

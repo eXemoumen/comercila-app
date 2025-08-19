@@ -226,3 +226,5 @@ export const MonthlyBenefitsChart = React.memo(
     );
   }
 );
+
+MonthlyBenefitsChart.displayName = "MonthlyBenefitsChart";

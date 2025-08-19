@@ -58,7 +58,7 @@ export const MonthlySalesDetailModal: React.FC<
       setIsMobile(mobile);
 
       if (isAndroid() && mobile) {
-        console.log("🤖 Android mobile detected - applying optimizations");
+        
         mobileUtils.optimizeForVirements();
       }
     };

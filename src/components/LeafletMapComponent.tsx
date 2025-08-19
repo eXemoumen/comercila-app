@@ -54,7 +54,7 @@ export default function LeafletMapComponent({ supermarkets, userLocation }: Leaf
     supermarkets.forEach(supermarket => {
       // Skip if location is missing or invalid
       if (!supermarket.latitude || !supermarket.longitude) {
-        console.log(`Skipping supermarket ${supermarket.name} - missing location data`);
+        
         return;
       }
 

@@ -3,49 +3,71 @@ package com.example.app.receivers;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
-import android.net.NetworkInfo;
 import android.os.Build;
+import android.util.Log;
 
+import com.example.app.offline.NetworkQualityMonitor;
 import com.example.app.services.OfflineSyncService;
 
+/**
+ * Enhanced network state receiver that considers network quality
+ */
 public class NetworkStateReceiver extends BroadcastReceiver {
+    private static final String TAG = "NetworkStateReceiver";
     
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (isNetworkAvailable(context)) {
-            // Network is available, trigger sync
-            Intent syncIntent = new Intent(context, OfflineSyncService.class);
-            syncIntent.setAction(OfflineSyncService.ACTION_SYNC_DATA);
-            context.startService(syncIntent);
+        String action = intent.getAction();
+        Log.d(TAG, "Received broadcast: " + action);
+        
+        if (action == null) {
+            return;
+        }
+        
+        // Handle connectivity changes
+        if ("android.net.conn.CONNECTIVITY_CHANGE".equals(action) ||
+            "android.net.wifi.WIFI_STATE_CHANGED".equals(action)) {
+            
+            handleNetworkChange(context);
         }
     }
     
-    private boolean isNetworkAvailable(Context context) {
-        ConnectivityManager connectivityManager = (ConnectivityManager) 
-            context.getSystemService(Context.CONNECTIVITY_SERVICE);
+    private void handleNetworkChange(Context context) {
+        NetworkQualityMonitor networkMonitor = new NetworkQualityMonitor(context);
+        NetworkQualityMonitor.NetworkInfo networkInfo = networkMonitor.getCurrentNetworkInfo();
         
-        if (connectivityManager == null) {
-            return false;
+        Log.d(TAG, "Network status: " + networkInfo.type + 
+                   ", Quality: " + networkInfo.quality + 
+                   ", Connected: " + networkInfo.isConnected);
+        
+        if (networkInfo.isConnected) {
+            // Network is available
+            if (networkInfo.isSuitableForSync()) {
+                Log.d(TAG, "Network suitable for sync, triggering sync service");
+                startSyncService(context);
+            } else {
+                Log.d(TAG, "Network quality poor, skipping sync");
+            }
+        } else {
+            Log.d(TAG, "Network unavailable");
+            // Could potentially stop sync service here if needed
         }
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Network network = connectivityManager.getActiveNetwork();
-            if (network == null) {
-                return false;
+    }
+    
+    private void startSyncService(Context context) {
+        try {
+            Intent syncIntent = new Intent(context, OfflineSyncService.class);
+            syncIntent.setAction(OfflineSyncService.ACTION_SYNC_DATA);
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(syncIntent);
+            } else {
+                context.startService(syncIntent);
             }
             
-            NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
-            return capabilities != null && (
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-            );
-        } else {
-            NetworkInfo activeNetwork = connectivityManager.getActiveNetworkInfo();
-            return activeNetwork != null && activeNetwork.isConnected();
+            Log.d(TAG, "Sync service started");
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting sync service", e);
         }
     }
 }

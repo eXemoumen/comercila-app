@@ -159,7 +159,7 @@ export const deleteSupabaseSale = async (saleId: string): Promise<boolean> => {
         
         // Update fragrance stock - add back the quantities
         for (const [fragranceId, quantity] of Object.entries(saleData.fragrance_distribution)) {
-            await updateSupabaseFragranceStock(fragranceId, quantity);
+            await updateSupabaseFragranceStock(fragranceId, Number(quantity));
         }
     } else {
         // If no fragrance distribution data, distribute evenly across fragrances
@@ -355,11 +355,12 @@ export const completeSupabaseOrder = async (orderId: string): Promise<Order | nu
 };
 
 // Stock CRUD
-export const getSupabaseStockHistory = async (): Promise<Stock[]> => {
+export const getSupabaseStockHistory = async (limit: number = 3): Promise<Stock[]> => {
     const { data, error } = await supabase
         .from("stock_history")
         .select("*")
-        .order('date', { ascending: false });
+        .order('date', { ascending: false })
+        .limit(limit);
 
     if (error) {
         console.error("Error fetching stock history:", error);

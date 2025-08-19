@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
@@ -13,34 +14,44 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 import com.example.app.R;
-import com.example.app.database.AppDatabase;
-import com.example.app.database.dao.OfflineQueueDao;
-import com.example.app.database.dao.SaleDao;
-import com.example.app.database.entity.OfflineQueueItem;
-import com.example.app.database.entity.Sale;
+import com.example.app.offline.OfflineConfig;
+import com.example.app.offline.OfflineSyncManager;
+import com.example.app.offline.NetworkQualityMonitor;
 
-import java.util.Date;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-public class OfflineSyncService extends Service {
+public class OfflineSyncService extends Service implements OfflineSyncManager.SyncListener {
     private static final String TAG = "OfflineSyncService";
+    
+    // Actions
     public static final String ACTION_SYNC_DATA = "com.example.app.SYNC_DATA";
     public static final String ACTION_ADD_TO_QUEUE = "com.example.app.ADD_TO_QUEUE";
+    public static final String ACTION_STOP_SYNC = "com.example.app.STOP_SYNC";
     
-    private static final String CHANNEL_ID = "offline_sync_channel";
-    private static final int NOTIFICATION_ID = 1001;
+    // Extras for ADD_TO_QUEUE action
+    public static final String EXTRA_OPERATION_TYPE = "operation_type";
+    public static final String EXTRA_TABLE_NAME = "table_name";
+    public static final String EXTRA_RECORD_ID = "record_id";
+    public static final String EXTRA_DATA = "data";
+    public static final String EXTRA_PRIORITY = "priority";
     
-    private AppDatabase database;
-    private ExecutorService executorService;
-    private boolean isRunning = false;
+    private OfflineSyncManager syncManager;
+    private NotificationManager notificationManager;
+    private final IBinder binder = new LocalBinder();
+    
+    public class LocalBinder extends Binder {
+        public OfflineSyncService getService() {
+            return OfflineSyncService.this;
+        }
+    }
     
     @Override
     public void onCreate() {
         super.onCreate();
-        database = AppDatabase.getInstance(this);
-        executorService = Executors.newSingleThreadExecutor();
+        Log.d(TAG, "Service created");
+        
+        syncManager = new OfflineSyncManager(this);
+        syncManager.setSyncListener(this);
+        
+        notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         createNotificationChannel();
     }
     
@@ -48,178 +59,158 @@ public class OfflineSyncService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
             String action = intent.getAction();
+            Log.d(TAG, "Received action: " + action);
+            
             if (ACTION_SYNC_DATA.equals(action)) {
-                startSync();
+                syncManager.startSync();
             } else if (ACTION_ADD_TO_QUEUE.equals(action)) {
-                // Handle adding items to offline queue
-                String operationType = intent.getStringExtra("operation_type");
-                String tableName = intent.getStringExtra("table_name");
-                String recordId = intent.getStringExtra("record_id");
-                String data = intent.getStringExtra("data");
-                int priority = intent.getIntExtra("priority", 2);
-                
-                addToOfflineQueue(operationType, tableName, recordId, data, priority);
+                handleAddToQueue(intent);
+            } else if (ACTION_STOP_SYNC.equals(action)) {
+                syncManager.stopSync();
             }
         }
         
         return START_STICKY;
     }
     
-    private void startSync() {
-        if (isRunning) {
-            Log.d(TAG, "Sync already running");
-            return;
-        }
+    private void handleAddToQueue(Intent intent) {
+        String operationType = intent.getStringExtra(EXTRA_OPERATION_TYPE);
+        String tableName = intent.getStringExtra(EXTRA_TABLE_NAME);
+        String recordId = intent.getStringExtra(EXTRA_RECORD_ID);
+        String data = intent.getStringExtra(EXTRA_DATA);
+        int priority = intent.getIntExtra(EXTRA_PRIORITY, OfflineConfig.PRIORITY_MEDIUM);
         
-        isRunning = true;
-        startForeground(NOTIFICATION_ID, createNotification("Synchronizing data..."));
-        
-        executorService.execute(() -> {
-            try {
-                Log.d(TAG, "Starting offline sync...");
-                
-                // Process offline queue
-                processOfflineQueue();
-                
-                // Sync local data with server
-                syncLocalData();
-                
-                Log.d(TAG, "Offline sync completed");
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Error during sync", e);
-            } finally {
-                isRunning = false;
-                stopForeground(true);
-                stopSelf();
-            }
-        });
-    }
-    
-    private void processOfflineQueue() {
-        OfflineQueueDao queueDao = database.offlineQueueDao();
-        List<OfflineQueueItem> pendingItems = queueDao.getPendingItems();
-        
-        Log.d(TAG, "Processing " + pendingItems.size() + " pending items");
-        
-        for (OfflineQueueItem item : pendingItems) {
-            try {
-                // Mark as processing
-                item.status = "processing";
-                queueDao.updateItem(item);
-                
-                // Process based on operation type
-                boolean success = processQueueItem(item);
-                
-                if (success) {
-                    item.status = "completed";
-                    queueDao.updateItem(item);
-                } else {
-                    item.status = "failed";
-                    item.retryCount++;
-                    item.lastRetry = new Date();
-                    queueDao.updateItem(item);
-                }
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Error processing queue item: " + item.id, e);
-                item.status = "failed";
-                item.errorMessage = e.getMessage();
-                queueDao.updateItem(item);
-            }
+        if (operationType != null && tableName != null && recordId != null && data != null) {
+            syncManager.queueOperation(operationType, tableName, recordId, data, priority);
+            Log.d(TAG, "Queued operation: " + operationType + " on " + tableName);
+        } else {
+            Log.w(TAG, "Invalid queue operation parameters");
         }
     }
     
-    private boolean processQueueItem(OfflineQueueItem item) {
-        // This would contain the actual logic to sync with Supabase
-        // For now, we'll simulate the process
-        Log.d(TAG, "Processing queue item: " + item.operationType + " on " + item.tableName);
-        
-        // Simulate network delay
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        // Simulate success/failure based on retry count
-        return item.retryCount < 3;
+    // SyncListener implementation
+    @Override
+    public void onSyncStarted() {
+        Log.d(TAG, "Sync started");
+        startForeground(OfflineConfig.NOTIFICATION_ID, createNotification("Synchronizing data..."));
     }
     
-    private void syncLocalData() {
-        // Sync local data with server
-        SaleDao saleDao = database.saleDao();
-        List<Sale> pendingSales = saleDao.getSalesBySyncStatus("pending");
-        
-        Log.d(TAG, "Syncing " + pendingSales.size() + " pending sales");
-        
-        for (Sale sale : pendingSales) {
-            try {
-                // Simulate server sync
-                sale.syncStatus = "synced";
-                sale.lastSyncAttempt = new Date();
-                saleDao.updateSale(sale);
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Error syncing sale: " + sale.id, e);
-                sale.syncStatus = "failed";
-                sale.lastSyncAttempt = new Date();
-                saleDao.updateSale(sale);
-            }
-        }
+    @Override
+    public void onSyncProgress(int completed, int total) {
+        Log.d(TAG, "Sync progress: " + completed + "/" + total);
+        String message = "Synchronizing... " + completed + "/" + total + " items";
+        updateNotification(message);
     }
     
-    private void addToOfflineQueue(String operationType, String tableName, String recordId, String data, int priority) {
-        OfflineQueueItem item = new OfflineQueueItem();
-        item.operationType = operationType;
-        item.tableName = tableName;
-        item.recordId = recordId;
-        item.data = data;
-        item.priority = priority;
-        item.status = "pending";
-        item.createdAt = new Date();
-        item.retryCount = 0;
+    @Override
+    public void onSyncCompleted(OfflineSyncManager.SyncResult result) {
+        Log.d(TAG, "Sync completed: " + result.successfulItems + "/" + result.totalItems + " successful");
         
-        database.offlineQueueDao().insertItem(item);
-        Log.d(TAG, "Added item to offline queue: " + operationType + " on " + tableName);
+        String message;
+        if (result.isSuccess()) {
+            message = "Sync completed successfully (" + result.successfulItems + " items)";
+        } else {
+            message = "Sync completed with " + result.failedItems + " failures";
+        }
+        
+        updateNotification(message);
+        
+        // Stop foreground after a delay to show the result
+        new android.os.Handler().postDelayed(() -> {
+            stopForeground(true);
+            // Keep service running for future sync operations
+        }, 3000);
+    }
+    
+    @Override
+    public void onSyncError(String error) {
+        Log.e(TAG, "Sync error: " + error);
+        updateNotification("Sync error: " + error);
+        
+        // Stop foreground after showing error
+        new android.os.Handler().postDelayed(() -> {
+            stopForeground(true);
+        }, 3000);
+    }
+    
+    @Override
+    public void onNetworkStatusChanged(boolean available, NetworkQualityMonitor.NetworkInfo networkInfo) {
+        if (available && networkInfo != null) {
+            Log.d(TAG, "Network available: " + networkInfo.type + " (quality: " + networkInfo.quality + ")");
+        } else {
+            Log.d(TAG, "Network unavailable");
+        }
     }
     
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
+                OfflineConfig.NOTIFICATION_CHANNEL_ID,
                 "Offline Sync",
                 NotificationManager.IMPORTANCE_LOW
             );
             channel.setDescription("Notifications for offline data synchronization");
+            channel.setShowBadge(false);
             
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(channel);
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
             }
         }
     }
     
     private Notification createNotification(String message) {
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("TopFresh")
+        return new NotificationCompat.Builder(this, OfflineConfig.NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("TopFresh Sync")
             .setContentText(message)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setAutoCancel(false)
             .build();
+    }
+    
+    private void updateNotification(String message) {
+        if (notificationManager != null) {
+            Notification notification = createNotification(message);
+            notificationManager.notify(OfflineConfig.NOTIFICATION_ID, notification);
+        }
+    }
+    
+    // Public API methods for bound clients
+    public OfflineSyncManager getSyncManager() {
+        return syncManager;
+    }
+    
+    public void queueOperation(String operationType, String tableName, String recordId, String data, int priority) {
+        if (syncManager != null) {
+            syncManager.queueOperation(operationType, tableName, recordId, data, priority);
+        }
+    }
+    
+    public boolean isSyncing() {
+        return syncManager != null && syncManager.isSyncing();
+    }
+    
+    public int getPendingItemsCount() {
+        return syncManager != null ? syncManager.getPendingItemsCount() : 0;
+    }
+    
+    public int getFailedItemsCount() {
+        return syncManager != null ? syncManager.getFailedItemsCount() : 0;
     }
     
     @Override
     public IBinder onBind(Intent intent) {
-        return null;
+        return binder;
     }
     
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (executorService != null) {
-            executorService.shutdown();
+        Log.d(TAG, "Service destroyed");
+        
+        if (syncManager != null) {
+            syncManager.shutdown();
         }
     }
 }

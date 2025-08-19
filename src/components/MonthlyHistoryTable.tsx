@@ -28,24 +28,6 @@ const monthNamesMap: Record<string, number> = {
   décembre: 11,
 };
 
-function sortMonthlyData(data: Record<string, MonthlyData>) {
-  return Object.entries(data).sort((a, b) => {
-    // Extract month and year from the formatted strings
-    const monthA = a[0].split(" ")[0].toLowerCase();
-    const yearA = a[0].split(" ")[1];
-    const monthB = b[0].split(" ")[0].toLowerCase();
-    const yearB = b[0].split(" ")[1];
-
-    // Compare years first
-    if (yearA !== yearB) {
-      return parseInt(yearA) - parseInt(yearB);
-    }
-
-    // If years are equal, compare months
-    return (monthNamesMap[monthA] || 0) - (monthNamesMap[monthB] || 0);
-  });
-}
-
 export function MonthlyHistoryTable({
   monthlyBenefits,
   monthlyPaidBenefits,

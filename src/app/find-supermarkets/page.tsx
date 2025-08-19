@@ -141,7 +141,7 @@ export default function FindSupermarkets() {
       }
 
       const overpassData = await overpassResponse.json();
-      console.log("Overpass response:", overpassData);
+      
 
       const nearbySupermarkets: SupermarketType[] = overpassData.elements
         .filter(
@@ -198,7 +198,7 @@ export default function FindSupermarkets() {
             !isNaN(supermarket.longitude)
         );
 
-      console.log("Found nearby supermarkets:", nearbySupermarkets);
+      
       setFilteredSupermarkets(nearbySupermarkets);
     } catch (error) {
       console.error("Error searching location:", error);
@@ -221,7 +221,7 @@ export default function FindSupermarkets() {
     setError(null);
 
     try {
-      console.log("Searching for:", searchQuery);
+      
       const geocodeResponse = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           searchQuery
@@ -233,18 +233,18 @@ export default function FindSupermarkets() {
       }
 
       const geocodeData = (await geocodeResponse.json()) as GeocodingResult[];
-      console.log("Geocoding response:", geocodeData);
+      
 
       if (geocodeData && geocodeData.length > 0) {
         const location = {
           lat: parseFloat(geocodeData[0].lat),
           lng: parseFloat(geocodeData[0].lon),
         };
-        console.log("Found location:", location);
+        
         setSearchLocation(location);
         handleSearchWithLocation(location);
       } else {
-        console.log("No location found");
+        
         setError("Aucun lieu trouvé pour cette recherche en Algérie.");
         setFilteredSupermarkets([]);
         setSearchLocation(null);

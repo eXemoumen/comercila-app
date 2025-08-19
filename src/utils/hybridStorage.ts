@@ -41,57 +41,58 @@ import {
 import { getMigrationStatus } from './migration';
 import { supabase } from '@/lib/supabase';
 import type { Sale, Order, Stock, Payment, Supermarket, FragranceStock } from './storage';
-import { isAndroid } from './mobileConfig';
+// import { isAndroid } from './mobileConfig';
 import { offlineStorageManager } from './androidOfflineStorage';
+import { networkDetector } from './networkDetection';
+import { 
+    getOfflineSales, 
+    addOfflineSale, 
+    getOfflineSupermarkets,
+    syncCacheToOfflineStorage
+} from './localOfflineStorage';
 
-// Configuration for which data sources to use
+// Configuration for which data sources to use (now dynamic based on network)
 const USE_SUPABASE = {
-    supermarkets: true, // Always use Supabase
-    sales: true, // Always use Supabase
-    orders: true, // Always use Supabase
-    stock: true, // Always use Supabase
-    fragranceStock: true // Always use Supabase
+    supermarkets: false, // Will be set dynamically
+    sales: false, // Will be set dynamically  
+    orders: false, // Will be set dynamically
+    stock: false, // Will be set dynamically
+    fragranceStock: false // Will be set dynamically
 };
 
-// Force Supabase usage - but migrate data first
-const FORCE_SUPABASE = true;
+// Force Supabase usage - but migrate data first (disabled for offline support)
+// const FORCE_SUPABASE = false;
 
 // Android offline mode configuration
 const USE_ANDROID_OFFLINE = false; // Temporarily disabled to prevent runtime errors
 // const USE_ANDROID_OFFLINE = isAndroid();
 
-// Update configuration based on migration status
+// Update configuration based on network status and migration
 const updateStorageConfig = async () => {
     if (typeof window === 'undefined') return;
 
-    // Force Supabase usage if enabled or on Android
-    if (FORCE_SUPABASE || isAndroid()) {
-        USE_SUPABASE.supermarkets = true;
-        USE_SUPABASE.sales = true;
-        USE_SUPABASE.orders = true;
-        USE_SUPABASE.stock = true;
-        USE_SUPABASE.fragranceStock = true;
-        
-        // Set migration flags to force Supabase
-        localStorage.setItem('supermarket_migration_done', 'true');
-        localStorage.setItem('sales_migration_done', 'true');
-        localStorage.setItem('orders_migration_done', 'true');
-        localStorage.setItem('stock_migration_done', 'true');
-        localStorage.setItem('fragrance_stock_migration_done', 'true');
-        localStorage.setItem('full_migration_complete', 'true');
-        
-        // Android-specific flag
-        if (isAndroid()) {
-            localStorage.setItem('force_supabase_android', 'true');
-            console.log('🤖 Android detected - forcing Supabase usage');
-        }
-        
-        console.log('🚀 Forcing Supabase usage for all data operations');
-        
-        // Run migration if needed
-        await runMigrationIfNeeded();
-        return;
-    }
+    // Set hybrid mode - use both Supabase (when online) and local storage (when offline)
+    USE_SUPABASE.supermarkets = true;
+    USE_SUPABASE.sales = true;
+    USE_SUPABASE.orders = true;
+    USE_SUPABASE.stock = true;
+    USE_SUPABASE.fragranceStock = true;
+    
+    // Set migration flags to enable Supabase functionality
+    localStorage.setItem('supermarket_migration_done', 'true');
+    localStorage.setItem('sales_migration_done', 'true');
+    localStorage.setItem('orders_migration_done', 'true');
+    localStorage.setItem('stock_migration_done', 'true');
+    localStorage.setItem('fragrance_stock_migration_done', 'true');
+    localStorage.setItem('full_migration_complete', 'true');
+    
+    console.log('🔄 Hybrid mode enabled - Supabase when online, local storage when offline');
+    
+    // Run migration if needed to ensure local data exists
+    await runMigrationIfNeeded();
+    
+    // Sync any cached data to offline storage
+    await syncCacheToOfflineStorage();
 
     // Original migration logic (kept for reference)
     const status = getMigrationStatus();
@@ -203,7 +204,57 @@ let isInitialized = false;
 const initializeStorage = async () => {
     if (isInitialized) return;
     await updateStorageConfig();
+    
+    // Set up network listener for sync
+    networkDetector.addListener(async (isOnline) => {
+        if (isOnline) {
+            console.log('🌐 Network restored - syncing pending operations...');
+            await syncPendingOperations();
+        }
+    });
+    
     isInitialized = true;
+};
+
+// Sync pending operations when network is restored
+const syncPendingOperations = async () => {
+    try {
+        // Sync pending sales
+        const pendingSales = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
+        if (pendingSales.length > 0) {
+            console.log('🔄 Syncing', pendingSales.length, 'pending sales...');
+            
+            const successfulSales = [];
+            const failedSales = [];
+            
+            for (const operation of pendingSales) {
+                try {
+                    if (operation.type === 'create') {
+                        await addSupabaseSale(operation.data);
+                        successfulSales.push(operation);
+                        console.log('✅ Synced sale:', operation.id);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to sync sale:', operation.id, error);
+                    failedSales.push(operation);
+                }
+            }
+            
+            // Keep only failed operations for retry
+            localStorage.setItem('pendingSaleOperations', JSON.stringify(failedSales));
+            
+            if (successfulSales.length > 0) {
+                // Clear cached data to force refresh
+                localStorage.removeItem('cachedSales');
+                console.log('🎉 Successfully synced', successfulSales.length, 'sales');
+            }
+        }
+        
+        // TODO: Add sync for other data types (supermarkets, orders, etc.)
+        
+    } catch (error) {
+        console.error('❌ Error during sync:', error);
+    }
 };
 
 // Hybrid Sales Functions with Android offline support
@@ -225,10 +276,43 @@ export const getSales = async (): Promise<Sale[]> => {
     }
 
     if (USE_SUPABASE.sales) {
-        console.log('📊 Using Supabase for sales data');
-        const sales = await getSupabaseSales();
-        console.log('📊 Supabase sales loaded:', sales.length, 'records');
-        return sales;
+        // Check if we're online
+        if (networkDetector.isOnline()) {
+            try {
+                console.log('📊 Using Supabase for sales data (online)');
+                const sales = await getSupabaseSales();
+                console.log('📊 Supabase sales loaded:', sales.length, 'records');
+                
+                // Cache the data for offline access
+                localStorage.setItem('cachedSales', JSON.stringify(sales));
+                localStorage.setItem('cachedSalesTimestamp', Date.now().toString());
+                
+                // Also sync to offline storage for true offline access
+                await syncCacheToOfflineStorage();
+                
+                return sales;
+            } catch (error) {
+                console.warn('❌ Failed to fetch from Supabase, falling back to cache:', error);
+            }
+        }
+        
+        // Offline or Supabase failed - try cached data first
+        try {
+            const cachedSales = localStorage.getItem('cachedSales');
+            if (cachedSales) {
+                const sales = JSON.parse(cachedSales);
+                console.log('📱 Using cached sales data (offline):', sales.length, 'records');
+                return sales;
+            }
+        } catch (error) {
+            console.warn('❌ Failed to load cached sales:', error);
+        }
+        
+        // Final fallback to true offline storage
+        console.log('💾 Using offline storage for sales data (offline fallback)');
+        const offlineSales = await getOfflineSales();
+        console.log('💾 Offline sales loaded:', offlineSales.length, 'records');
+        return offlineSales;
     } else {
         console.log('💾 Using local storage for sales data');
         return getLocalSales();
@@ -253,8 +337,48 @@ export const addSale = async (saleData: Omit<Sale, "id">): Promise<Sale | null> 
     }
 
     if (USE_SUPABASE.sales) {
-        console.log('📊 Using Supabase to add sale');
-        return await addSupabaseSale(saleData);
+        // Always add to offline storage first for immediate availability
+        const offlineSale = await addOfflineSale(saleData);
+        
+        if (networkDetector.isOnline()) {
+            try {
+                console.log('📊 Using Supabase to add sale (online)');
+                const supabaseSale = await addSupabaseSale(saleData);
+                
+                // Clear cached data to force refresh
+                localStorage.removeItem('cachedSales');
+                
+                return supabaseSale;
+            } catch (error) {
+                console.warn('❌ Failed to add sale to Supabase, queued for sync:', error);
+                
+                // Queue for sync when online
+                const pendingOps = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
+                pendingOps.push({
+                    type: 'create',
+                    data: saleData,
+                    timestamp: Date.now(),
+                    id: `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                });
+                localStorage.setItem('pendingSaleOperations', JSON.stringify(pendingOps));
+                
+                return offlineSale;
+            }
+        } else {
+            console.log('📱 Offline: Adding sale to local storage and queue for sync');
+            
+            // Queue for sync when online
+            const pendingOps = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
+            pendingOps.push({
+                type: 'create',
+                data: saleData,
+                timestamp: Date.now(),
+                id: `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            });
+            localStorage.setItem('pendingSaleOperations', JSON.stringify(pendingOps));
+            
+            return offlineSale;
+        }
     } else {
         console.log('💾 Using local storage to add sale');
         return addLocalSale(saleData);
@@ -387,13 +511,15 @@ export const completeOrder = async (orderId: string): Promise<Order | null> => {
 };
 
 // Hybrid Stock Functions
-export const getStockHistory = async (): Promise<Stock[]> => {
+export const getStockHistory = async (limit: number = 3): Promise<Stock[]> => {
     await initializeStorage();
 
     if (USE_SUPABASE.stock) {
-        return await getSupabaseStockHistory();
+        return await getSupabaseStockHistory(limit);
     } else {
-        return getLocalStockHistory();
+        // For local storage, slice the results to match the limit
+        const localHistory = await getLocalStockHistory();
+        return localHistory.slice(0, limit);
     }
 };
 
@@ -478,7 +604,46 @@ export const setFragranceStock = async (fragranceId: string, newQuantity: number
 
 // Hybrid Supermarket Functions (already using Supabase)
 export const getSupermarkets = async (): Promise<Supermarket[]> => {
-    return await getLocalSupermarkets(); // This already uses Supabase
+    await initializeStorage();
+    console.log('🏪 Getting supermarkets data...');
+
+    if (USE_SUPABASE.supermarkets) {
+        // Check if we're online
+        if (networkDetector.isOnline()) {
+            try {
+                console.log('📊 Using Supabase for supermarkets data (online)');
+                const supermarkets = await getLocalSupermarkets();
+                console.log('📊 Supabase supermarkets loaded:', supermarkets.length, 'records');
+                
+                // Cache the data for offline access
+                localStorage.setItem('cachedSupermarkets', JSON.stringify(supermarkets));
+                localStorage.setItem('cachedSupermarketsTimestamp', Date.now().toString());
+                
+                return supermarkets;
+            } catch (error) {
+                console.warn('❌ Failed to fetch supermarkets from Supabase, falling back to cache:', error);
+            }
+        }
+        
+        // Offline or Supabase failed - try cached data first
+        try {
+            const cachedSupermarkets = localStorage.getItem('cachedSupermarkets');
+            if (cachedSupermarkets) {
+                const supermarkets = JSON.parse(cachedSupermarkets);
+                console.log('📱 Using cached supermarkets data (offline):', supermarkets.length, 'records');
+                return supermarkets;
+            }
+        } catch (error) {
+            console.warn('❌ Failed to load cached supermarkets:', error);
+        }
+        
+        // Final fallback to offline storage
+        console.log('💾 Using offline storage for supermarkets data (offline fallback)');
+        return getOfflineSupermarkets();
+    } else {
+        console.log('💾 Using local storage for supermarkets data');
+        return getLocalSupermarkets();
+    }
 };
 
 export const addSupermarket = async (supermarketData: Omit<Supermarket, "id" | "created_at">): Promise<Supermarket | null> => {
@@ -566,4 +731,28 @@ export const isAndroidOfflineAvailable = (): boolean => {
     console.warn('Error checking Android offline availability:', error);
     return false;
   }
+};
+
+// Get offline sync status
+export const getOfflineSyncStatus = () => {
+    const pendingSales = JSON.parse(localStorage.getItem('pendingSaleOperations') || '[]');
+    return { 
+        lastSync: localStorage.getItem('lastSyncTimestamp'), 
+        isOnline: networkDetector.isOnline(), 
+        queueStatus: { 
+            pending: pendingSales.length, 
+            failed: pendingSales.filter((op: {failed?: boolean}) => op.failed).length 
+        } 
+    };
+};
+
+// Export sync function for manual sync
+export const forceSyncPendingOperations = async () => {
+    if (networkDetector.isOnline()) {
+        await syncPendingOperations();
+        localStorage.setItem('lastSyncTimestamp', new Date().toISOString());
+        console.log('🎉 Manual sync completed');
+    } else {
+        throw new Error('Cannot sync while offline');
+    }
 };

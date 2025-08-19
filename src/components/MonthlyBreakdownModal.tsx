@@ -53,7 +53,6 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
       setIsMobile(mobile);
 
       if (isAndroid() && mobile) {
-        console.log("🤖 Android mobile detected - applying optimizations");
         mobileUtils.optimizeForVirements();
       }
     };
@@ -66,7 +65,7 @@ export const MonthlyBreakdownModal: React.FC<MonthlyBreakdownModalProps> = ({
   if (!isOpen) return null;
 
   // Debug: Log the data being received
-  console.log("🔍 MonthlyBreakdownModal Debug:", {
+  console.log({
     type,
     title,
     monthlyBenefitsKeys: Object.keys(monthlyBenefits),

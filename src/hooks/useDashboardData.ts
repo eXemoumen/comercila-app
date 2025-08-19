@@ -4,7 +4,7 @@ import {
     getCurrentStock,
     getFragranceStock,
 } from "@/utils/hybridStorage";
-import { debugPaidProfitCalculation, calculateMonthlyBenefits, calculateMonthlyPaidBenefits, calculateMonthlySales } from "@/utils/dashboardCalculations";
+import { calculateMonthlyBenefits, calculateMonthlyPaidBenefits, calculateMonthlySales } from "@/utils/dashboardCalculations";
 
 interface MonthlySalesData {
     quantity: number;

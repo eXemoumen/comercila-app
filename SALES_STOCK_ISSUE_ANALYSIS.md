@@ -110,13 +110,13 @@ The script will:
 The current implementation has good logging:
 
 ```typescript
-console.log("🛒 Adding sale to database...");
-console.log("✅ Sale added successfully:", addedSale.id);
-console.log("🔄 Updating stock after sale:", {
+
+
+
   cartons: -cartons,
   fragranceDistribution,
 });
-console.log("✅ Stock update result:", stockResult);
+
 ```
 
 ### **2. Error Handling**

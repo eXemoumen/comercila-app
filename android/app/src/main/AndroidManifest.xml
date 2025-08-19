@@ -27,10 +27,11 @@
         <!-- Local Notifications Receiver -->
         <receiver android:name="com.getcapacitor.plugin.LocalNotificationsPlugin$NotificationReceiver" />
 
-        <!-- Offline Sync Service -->
+        <!-- Enhanced Offline Sync Service -->
         <service
             android:name=".services.OfflineSyncService"
             android:exported="false"
+            android:enabled="true"
             android:foregroundServiceType="dataSync" />
 
         <!-- Network State Receiver -->

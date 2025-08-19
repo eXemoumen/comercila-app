@@ -88,7 +88,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
   const requestNotificationPermission = async () => {
     try {
-      console.log("Requesting notification permission...");
+      
       setTestStatus({
         type: "info",
         message: "Demande d'autorisation en cours...",

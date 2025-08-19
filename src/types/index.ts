@@ -3,6 +3,7 @@ export interface Payment {
   date: string;
   amount: number;
   note?: string;
+  type?: 'virement' | 'direct' | 'other'; // Payment type to track virement payments
 }
 
 export interface Sale {

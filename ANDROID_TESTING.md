@@ -33,7 +33,7 @@ npm run android
 
 1. Open the TopFresh app on your Android device
 2. Wait for the app to load completely
-3. Check the console logs for Android-specific messages
+
 
 ### Step 2: Navigate to Virements
 
@@ -212,7 +212,7 @@ After successful testing:
 
 If you encounter issues:
 
-1. Check the console logs for error messages
+
 2. Verify Supabase configuration
 3. Test network connectivity
 4. Review Android device compatibility

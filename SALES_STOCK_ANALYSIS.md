@@ -37,7 +37,7 @@ for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
 
 ```typescript
 // Add the sale first
-console.log("🛒 Adding sale to database...");
+
 const addedSale = await addSale(sale);
 ```
 
@@ -45,7 +45,7 @@ const addedSale = await addSale(sale);
 
 ```typescript
 // Update stock by removing the sold cartons with fragrance distribution
-console.log("🔄 Updating stock after sale:", {
+
   cartons: -cartons,
   fragranceDistribution,
   saleDate,
