@@ -120,6 +120,18 @@ export const addSupabaseSale = async (saleData: Omit<Sale, "id">): Promise<Sale 
 };
 
 export const deleteSupabaseSale = async (saleId: string): Promise<boolean> => {
+    // Get the sale data before deleting for stock adjustment
+    const { data: saleData } = await supabase
+        .from("sales")
+        .select("*")
+        .eq("id", saleId)
+        .single();
+
+    if (!saleData) {
+        console.error("Sale not found for deletion:", saleId);
+        return false;
+    }
+
     // Delete payments first
     await supabase.from("payments").delete().eq("sale_id", saleId);
 
@@ -131,18 +143,86 @@ export const deleteSupabaseSale = async (saleId: string): Promise<boolean> => {
         return false;
     }
 
+    // Update stock by adding back the sold cartons
+    if (saleData.fragrance_distribution) {
+        // Get current stock before adding back
+        const { current_stock } = await getSupabaseCurrentStock();
+        const newCurrentStock = current_stock + saleData.cartons;
+        
+        await addSupabaseStockEntry(
+            saleData.cartons,
+            "added",
+            `Annulation de vente - ${new Date(saleData.date).toLocaleDateString()}`,
+            newCurrentStock,
+            saleData.fragrance_distribution
+        );
+        
+        // Update fragrance stock - add back the quantities
+        for (const [fragranceId, quantity] of Object.entries(saleData.fragrance_distribution)) {
+            await updateSupabaseFragranceStock(fragranceId, quantity);
+        }
+    } else {
+        // If no fragrance distribution data, distribute evenly across fragrances
+        const fragrances = await getSupabaseFragranceStock();
+        const fragranceCount = fragrances.length;
+        const baseAmount = Math.floor(saleData.cartons / fragranceCount);
+        const remainder = saleData.cartons % fragranceCount;
+
+        // Create even distribution
+        const evenDistribution: Record<string, number> = {};
+        fragrances.forEach((fragrance, index) => {
+            evenDistribution[fragrance.fragranceId] = baseAmount + (index < remainder ? 1 : 0);
+        });
+
+        // Get current stock before adding back
+        const { current_stock } = await getSupabaseCurrentStock();
+        const newCurrentStock = current_stock + saleData.cartons;
+
+        await addSupabaseStockEntry(
+            saleData.cartons,
+            "added",
+            `Annulation de vente - ${new Date(saleData.date).toLocaleDateString()}`,
+            newCurrentStock,
+            evenDistribution
+        );
+        
+        // Update fragrance stock - add back the quantities
+        for (const [fragranceId, quantity] of Object.entries(evenDistribution)) {
+            await updateSupabaseFragranceStock(fragranceId, quantity);
+        }
+    }
+
     return true;
 };
 
-export const updateSupabaseSalePayment = async (saleId: string, isPaid: boolean): Promise<Sale | null> => {
+export const updateSupabaseSalePayment = async (saleId: string, isPaid: boolean, paymentDate?: string): Promise<Sale | null> => {
+    // First get the current sale to calculate remaining amount
+    const { data: currentSale, error: fetchError } = await supabase
+        .from("sales")
+        .select("total_value, remaining_amount")
+        .eq("id", saleId)
+        .single();
+
+    if (fetchError) {
+        console.error("Error fetching current sale:", fetchError);
+        return null;
+    }
+
+    // Calculate new remaining amount
+    const newRemainingAmount = isPaid ? 0 : currentSale.total_value;
+
     const { data, error } = await supabase
         .from("sales")
         .update({
             is_paid: isPaid,
-            payment_date: isPaid ? new Date().toISOString() : null
+            payment_date: isPaid ? (paymentDate || new Date().toISOString()) : null,
+            remaining_amount: newRemainingAmount
         })
         .eq("id", saleId)
-        .select()
+        .select(`
+            *,
+            payments (*)
+        `)
         .single();
 
     if (error) {
@@ -162,7 +242,12 @@ export const updateSupabaseSalePayment = async (saleId: string, isPaid: boolean)
         paymentDate: data.payment_date,
         paymentNote: data.payment_note,
         expectedPaymentDate: data.expected_payment_date,
-        payments: [], // Will need to fetch separately if needed
+        payments: data.payments?.map((p: { id: string; date: string; amount: number; note: string }) => ({
+            id: p.id,
+            date: p.date,
+            amount: p.amount,
+            note: p.note
+        })) || [],
         remainingAmount: data.remaining_amount,
         fromOrder: data.from_order,
         note: data.note,
@@ -593,7 +678,7 @@ export const addSupabasePayment = async (saleId: string, payment: Omit<Payment, 
             .update({
                 remaining_amount: newRemainingAmount,
                 is_paid: isPaid,
-                payment_date: isPaid ? new Date().toISOString() : null
+                payment_date: isPaid ? payment.date : null
             })
             .eq("id", saleId)
             .select(`

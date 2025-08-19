@@ -15,22 +15,33 @@ import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
 import type { Sale } from "@/types/index";
 import type { Supermarket } from "@/utils/storage";
 
+interface MonthlyData {
+  quantity: number;
+  value: number;
+  netBenefit: number;
+}
+
 interface MonthlySalesDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   monthName: string;
-  monthData: {
-    quantity: number;
-    value: number;
-    netBenefit: number;
-  };
+  monthData: MonthlyData;
   sales: Sale[];
   virementPeriod?: string;
+  type?: "estimated" | "real"; // Add type prop to distinguish between estimated and real benefits
 }
 
 export const MonthlySalesDetailModal: React.FC<
   MonthlySalesDetailModalProps
-> = ({ isOpen, onClose, monthName, monthData, sales, virementPeriod }) => {
+> = ({
+  isOpen,
+  onClose,
+  monthName,
+  monthData,
+  sales,
+  virementPeriod,
+  type = "estimated",
+}) => {
   const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
@@ -77,19 +88,37 @@ export const MonthlySalesDetailModal: React.FC<
     if (!isOpen) return [];
 
     return sales.filter((sale) => {
-      const saleDate = new Date(sale.date);
-      const saleMonth = saleDate.toLocaleDateString("fr-FR", {
-        month: "long",
-        year: "numeric",
-      });
-      // Capitalize first letter for comparison
-      const formattedSaleMonth =
-        saleMonth.charAt(0).toUpperCase() + saleMonth.slice(1);
-      return formattedSaleMonth === monthName;
-    });
-  }, [sales, monthName, isOpen]);
+      if (type === "real") {
+        // For real benefits, filter by payment date
+        if (!sale.isPaid || !sale.paymentDate) {
+          return false; // Skip unpaid sales or sales without payment date
+        }
 
-  // Calculate payment statistics
+        const paymentDate = new Date(sale.paymentDate);
+        const paymentMonth = paymentDate.toLocaleDateString("fr-FR", {
+          month: "long",
+          year: "numeric",
+        });
+        // Capitalize first letter for comparison
+        const formattedPaymentMonth =
+          paymentMonth.charAt(0).toUpperCase() + paymentMonth.slice(1);
+        return formattedPaymentMonth === monthName;
+      } else {
+        // For estimated benefits, filter by sale date
+        const saleDate = new Date(sale.date);
+        const saleMonth = saleDate.toLocaleDateString("fr-FR", {
+          month: "long",
+          year: "numeric",
+        });
+        // Capitalize first letter for comparison
+        const formattedSaleMonth =
+          saleMonth.charAt(0).toUpperCase() + saleMonth.slice(1);
+        return formattedSaleMonth === monthName;
+      }
+    });
+  }, [sales, monthName, isOpen, type]);
+
+  // Calculate payment statistics - DIFFERENT LOGIC FOR REAL vs ESTIMATED
   const paymentStats = useMemo(() => {
     if (!isOpen)
       return {
@@ -98,44 +127,101 @@ export const MonthlySalesDetailModal: React.FC<
         unpaid: { count: 0, value: 0, benefit: 0 },
       };
 
-    const directPaid = monthSales.filter(
-      (sale) => sale.isPaid && sale.payments.length === 1
-    );
-    const virementPaid = monthSales.filter(
-      (sale) => sale.isPaid && sale.payments.length > 1
-    );
-    const unpaid = monthSales.filter((sale) => !sale.isPaid);
+    if (type === "real") {
+      // For real benefits: ALL sales are paid (filtered by payment date)
+      // No need to break down by payment type since we only care about when money was received
+      const totalPaid = monthSales; // All sales in monthSales are already paid (filtered by payment date)
 
-    return {
-      directPaid: {
-        count: directPaid.length,
-        value: directPaid.reduce((sum, sale) => sum + sale.totalValue, 0),
-        benefit: directPaid.reduce((sum, sale) => {
-          const benefitPerUnit =
-            sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-          return sum + sale.quantity * benefitPerUnit;
-        }, 0),
-      },
-      virementPaid: {
-        count: virementPaid.length,
-        value: virementPaid.reduce((sum, sale) => sum + sale.totalValue, 0),
-        benefit: virementPaid.reduce((sum, sale) => {
-          const benefitPerUnit =
-            sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-          return sum + sale.quantity * benefitPerUnit;
-        }, 0),
-      },
-      unpaid: {
-        count: unpaid.length,
-        value: unpaid.reduce((sum, sale) => sum + sale.totalValue, 0),
-        benefit: unpaid.reduce((sum, sale) => {
-          const benefitPerUnit =
-            sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-          return sum + sale.quantity * benefitPerUnit;
-        }, 0),
-      },
-    };
-  }, [monthSales, isOpen]);
+      return {
+        directPaid: {
+          count: totalPaid.filter((sale) => sale.payments.length === 1).length,
+          value: totalPaid
+            .filter((sale) => sale.payments.length === 1)
+            .reduce((sum, sale) => sum + sale.totalValue, 0),
+          benefit: totalPaid
+            .filter((sale) => sale.payments.length === 1)
+            .reduce((sum, sale) => {
+              const benefitPerUnit =
+                sale.pricePerUnit === 180
+                  ? 25
+                  : sale.pricePerUnit === 166
+                  ? 17
+                  : 0;
+              return sum + sale.quantity * benefitPerUnit;
+            }, 0),
+        },
+        virementPaid: {
+          count: totalPaid.filter((sale) => sale.payments.length > 1).length,
+          value: totalPaid
+            .filter((sale) => sale.payments.length > 1)
+            .reduce((sum, sale) => sum + sale.totalValue, 0),
+          benefit: totalPaid
+            .filter((sale) => sale.payments.length > 1)
+            .reduce((sum, sale) => {
+              const benefitPerUnit =
+                sale.pricePerUnit === 180
+                  ? 25
+                  : sale.pricePerUnit === 166
+                  ? 17
+                  : 0;
+              return sum + sale.quantity * benefitPerUnit;
+            }, 0),
+        },
+        unpaid: { count: 0, value: 0, benefit: 0 }, // No unpaid sales in real benefits
+      };
+    } else {
+      // For estimated benefits: Original logic (paid + unpaid breakdown)
+      const directPaid = monthSales.filter(
+        (sale) => sale.isPaid && sale.payments.length === 1
+      );
+      const virementPaid = monthSales.filter(
+        (sale) => sale.isPaid && sale.payments.length > 1
+      );
+      const unpaid = monthSales.filter((sale) => !sale.isPaid);
+
+      return {
+        directPaid: {
+          count: directPaid.length,
+          value: directPaid.reduce((sum, sale) => sum + sale.totalValue, 0),
+          benefit: directPaid.reduce((sum, sale) => {
+            const benefitPerUnit =
+              sale.pricePerUnit === 180
+                ? 25
+                : sale.pricePerUnit === 166
+                ? 17
+                : 0;
+            return sum + sale.quantity * benefitPerUnit;
+          }, 0),
+        },
+        virementPaid: {
+          count: virementPaid.length,
+          value: virementPaid.reduce((sum, sale) => sum + sale.totalValue, 0),
+          benefit: virementPaid.reduce((sum, sale) => {
+            const benefitPerUnit =
+              sale.pricePerUnit === 180
+                ? 25
+                : sale.pricePerUnit === 166
+                ? 17
+                : 0;
+            return sum + sale.quantity * benefitPerUnit;
+          }, 0),
+        },
+        unpaid: {
+          count: unpaid.length,
+          value: unpaid.reduce((sum, sale) => sum + sale.totalValue, 0),
+          benefit: unpaid.reduce((sum, sale) => {
+            const benefitPerUnit =
+              sale.pricePerUnit === 180
+                ? 25
+                : sale.pricePerUnit === 166
+                ? 17
+                : 0;
+            return sum + sale.quantity * benefitPerUnit;
+          }, 0),
+        },
+      };
+    }
+  }, [monthSales, isOpen, type]);
 
   if (!isOpen) return null;
 
@@ -214,12 +300,19 @@ export const MonthlySalesDetailModal: React.FC<
               <div>
                 <h2 className="text-lg font-bold">
                   Détail des Ventes - {monthName}
+                  {type === "real" && " (Bénéfices Réels)"}
+                  {type === "estimated" && " (Bénéfices Estimés)"}
                 </h2>
                 {virementPeriod && virementPeriod !== "mois en cours" && (
                   <p className="text-sm text-blue-100">
                     Période: {virementPeriod}
                   </p>
                 )}
+                <p className="text-sm text-blue-100">
+                  {type === "real"
+                    ? "Basé sur la date de paiement"
+                    : "Basé sur la date de vente"}
+                </p>
               </div>
             </div>
             <Button
@@ -295,7 +388,9 @@ export const MonthlySalesDetailModal: React.FC<
               className="w-full bg-gray-50 px-4 py-3 flex items-center justify-between hover:bg-gray-100 transition-colors"
             >
               <h3 className="text-lg font-semibold text-gray-800">
-                Statistiques de Paiement
+                {type === "real"
+                  ? "Résumé des Paiements Reçus"
+                  : "Statistiques de Paiement"}
               </h3>
               {expandedSections.statistics ? (
                 <ChevronUp className="h-5 w-5 text-gray-600" />
@@ -306,74 +401,126 @@ export const MonthlySalesDetailModal: React.FC<
 
             {expandedSections.statistics && (
               <div className="p-4">
-                <div
-                  className={`grid gap-3 ${
-                    isMobile ? "grid-cols-1" : "grid-cols-3"
-                  }`}
-                >
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                      <span className="text-sm font-medium text-green-700">
-                        Payé Directement
-                      </span>
+                {type === "real" ? (
+                  // REAL BENEFITS: Simple cash flow summary
+                  <div
+                    className={`grid gap-3 ${
+                      isMobile ? "grid-cols-1" : "grid-cols-2"
+                    }`}
+                  >
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        <span className="text-sm font-medium text-green-700">
+                          Paiements Reçus
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold text-green-800">
+                        {monthSales.length} ventes
+                      </p>
+                      <p className="text-sm text-green-600">
+                        {monthData.value.toLocaleString("fr-DZ")} DZD
+                      </p>
+                      <p className="text-xs text-green-500">
+                        Bénéfice: {monthData.netBenefit.toLocaleString("fr-DZ")}{" "}
+                        DZD
+                      </p>
                     </div>
-                    <p className="text-lg font-bold text-green-800">
-                      {paymentStats.directPaid.count} ventes
-                    </p>
-                    <p className="text-sm text-green-600">
-                      {paymentStats.directPaid.value.toLocaleString("fr-DZ")}{" "}
-                      DZD
-                    </p>
-                    <p className="text-xs text-green-500">
-                      Bénéfice:{" "}
-                      {paymentStats.directPaid.benefit.toLocaleString("fr-DZ")}{" "}
-                      DZD
-                    </p>
-                  </div>
 
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <div className="flex items-center space-x-2">
-                      <TrendingUp className="h-5 w-5 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-700">
-                        Payé par Virement
-                      </span>
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="h-5 w-5 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-700">
+                          Période de Paiement
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold text-blue-800">
+                        {monthName}
+                      </p>
+                      <p className="text-sm text-blue-600">
+                        Argent reçu ce mois
+                      </p>
+                      <p className="text-xs text-blue-500">
+                        Basé sur la date de paiement
+                      </p>
                     </div>
-                    <p className="text-lg font-bold text-blue-800">
-                      {paymentStats.virementPaid.count} ventes
-                    </p>
-                    <p className="text-sm text-blue-600">
-                      {paymentStats.virementPaid.value.toLocaleString("fr-DZ")}{" "}
-                      DZD
-                    </p>
-                    <p className="text-xs text-blue-500">
-                      Bénéfice:{" "}
-                      {paymentStats.virementPaid.benefit.toLocaleString(
-                        "fr-DZ"
-                      )}{" "}
-                      DZD
-                    </p>
                   </div>
+                ) : (
+                  // ESTIMATED BENEFITS: Original payment status breakdown
+                  <div
+                    className={`grid gap-3 ${
+                      isMobile ? "grid-cols-1" : "grid-cols-3"
+                    }`}
+                  >
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        <span className="text-sm font-medium text-green-700">
+                          Payé Directement
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold text-green-800">
+                        {paymentStats.directPaid.count} ventes
+                      </p>
+                      <p className="text-sm text-green-600">
+                        {paymentStats.directPaid.value.toLocaleString("fr-DZ")}{" "}
+                        DZD
+                      </p>
+                      <p className="text-xs text-green-500">
+                        Bénéfice:{" "}
+                        {paymentStats.directPaid.benefit.toLocaleString(
+                          "fr-DZ"
+                        )}{" "}
+                        DZD
+                      </p>
+                    </div>
 
-                  <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-5 w-5 text-red-600" />
-                      <span className="text-sm font-medium text-red-700">
-                        Non Payé
-                      </span>
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center space-x-2">
+                        <TrendingUp className="h-5 w-5 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-700">
+                          Payé par Virement
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold text-blue-800">
+                        {paymentStats.virementPaid.count} ventes
+                      </p>
+                      <p className="text-sm text-blue-600">
+                        {paymentStats.virementPaid.value.toLocaleString(
+                          "fr-DZ"
+                        )}{" "}
+                        DZD
+                      </p>
+                      <p className="text-xs text-blue-500">
+                        Bénéfice:{" "}
+                        {paymentStats.virementPaid.benefit.toLocaleString(
+                          "fr-DZ"
+                        )}{" "}
+                        DZD
+                      </p>
                     </div>
-                    <p className="text-lg font-bold text-red-800">
-                      {paymentStats.unpaid.count} ventes
-                    </p>
-                    <p className="text-sm text-red-600">
-                      {paymentStats.unpaid.value.toLocaleString("fr-DZ")} DZD
-                    </p>
-                    <p className="text-xs text-red-500">
-                      Bénéfice:{" "}
-                      {paymentStats.unpaid.benefit.toLocaleString("fr-DZ")} DZD
-                    </p>
+
+                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                      <div className="flex items-center space-x-2">
+                        <Clock className="h-5 w-5 text-red-600" />
+                        <span className="text-sm font-medium text-red-700">
+                          Non Payé
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold text-red-800">
+                        {paymentStats.unpaid.count} ventes
+                      </p>
+                      <p className="text-sm text-red-600">
+                        {paymentStats.unpaid.value.toLocaleString("fr-DZ")} DZD
+                      </p>
+                      <p className="text-xs text-red-500">
+                        Bénéfice:{" "}
+                        {paymentStats.unpaid.benefit.toLocaleString("fr-DZ")}{" "}
+                        DZD
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -465,7 +612,10 @@ export const MonthlySalesDetailModal: React.FC<
               className="w-full bg-gray-50 px-4 py-3 flex items-center justify-between hover:bg-gray-100 transition-colors"
             >
               <h3 className="text-lg font-semibold text-gray-800">
-                Détail des Ventes ({monthSales.length} ventes)
+                {type === "real"
+                  ? "Détail des Paiements Reçus"
+                  : "Détail des Ventes"}{" "}
+                ({monthSales.length} {type === "real" ? "paiements" : "ventes"})
               </h3>
               {expandedSections.salesTable ? (
                 <ChevronUp className="h-5 w-5 text-gray-600" />
@@ -505,8 +655,8 @@ export const MonthlySalesDetailModal: React.FC<
                                 <span
                                   className={`text-xs px-2 py-1 rounded-full font-medium ${paymentStatus.bgColor} ${paymentStatus.color}`}
                                 >
-                                  {paymentStatus.status === "virement"
-                                    ? "Virement"
+                                  {type === "real"
+                                    ? "Paiement Reçu"
                                     : paymentStatus.label}
                                 </span>
                               </div>
@@ -524,7 +674,12 @@ export const MonthlySalesDetailModal: React.FC<
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div>
                                 <p className="text-gray-600">
-                                  Date: {formatDate(sale.date)}
+                                  {type === "real" ? "Payé le:" : "Date:"}{" "}
+                                  {type === "real"
+                                    ? sale.paymentDate
+                                      ? formatDate(sale.paymentDate)
+                                      : "N/A"
+                                    : formatDate(sale.date)}
                                 </p>
                                 <p className="text-gray-600">
                                   Supermarché:{" "}
@@ -542,14 +697,38 @@ export const MonthlySalesDetailModal: React.FC<
                                   Total:{" "}
                                   {sale.totalValue.toLocaleString("fr-DZ")} DZD
                                 </p>
-                                <p className="text-gray-600">
-                                  Statut: {paymentStatus.label}
-                                </p>
+                                {type === "estimated" && (
+                                  <p className="text-gray-600">
+                                    Statut: {paymentStatus.label}
+                                  </p>
+                                )}
                               </div>
                             </div>
 
                             {/* Payment Details */}
-                            {sale.isPaid ? (
+                            {type === "real" ? (
+                              // REAL BENEFITS: Focus on payment information
+                              <div className="bg-green-50 rounded p-2 border border-green-200">
+                                <div className="space-y-1">
+                                  <p className="text-xs font-medium text-green-700">
+                                    💰 Paiement reçu le:{" "}
+                                    {sale.paymentDate
+                                      ? formatDate(sale.paymentDate)
+                                      : "N/A"}
+                                  </p>
+                                  <p className="text-xs text-green-600">
+                                    📅 Vente originale: {formatDate(sale.date)}
+                                  </p>
+                                  {sale.payments.length > 1 && (
+                                    <p className="text-xs text-blue-600">
+                                      📊 {sale.payments.length} paiements au
+                                      total
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ) : // ESTIMATED BENEFITS: Original payment details
+                            sale.isPaid ? (
                               <div className="bg-green-50 rounded p-2 border border-green-200">
                                 {sale.payments.length === 1 ? (
                                   <p className="text-xs text-green-700">
@@ -612,7 +791,7 @@ export const MonthlySalesDetailModal: React.FC<
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
+                            {type === "real" ? "Date Paiement" : "Date"}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Supermarché
@@ -629,9 +808,11 @@ export const MonthlySalesDetailModal: React.FC<
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Bénéfice (DZD)
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Statut Paiement
-                          </th>
+                          {type === "estimated" && (
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Statut Paiement
+                            </th>
+                          )}
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Détails
                           </th>
@@ -653,7 +834,11 @@ export const MonthlySalesDetailModal: React.FC<
                             <tr key={sale.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
-                                  {formatDate(sale.date)}
+                                  {type === "real"
+                                    ? sale.paymentDate
+                                      ? formatDate(sale.paymentDate)
+                                      : "N/A"
+                                    : formatDate(sale.date)}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -682,32 +867,48 @@ export const MonthlySalesDetailModal: React.FC<
                                   {totalBenefit.toLocaleString("fr-DZ")}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center space-x-2">
-                                  <StatusIcon
-                                    className={`h-4 w-4 ${paymentStatus.color}`}
-                                  />
-                                  <div className="flex flex-col">
-                                    <span
-                                      className={`text-xs px-2 py-1 rounded-full font-medium ${paymentStatus.bgColor} ${paymentStatus.color}`}
-                                    >
-                                      {paymentStatus.label}
-                                    </span>
-                                    {paymentStatus.status === "virement" &&
-                                      paymentStatus.completionDate && (
-                                        <span className="text-xs text-blue-600 font-medium mt-1">
-                                          ✅ Terminé le:{" "}
-                                          {formatDate(
-                                            paymentStatus.completionDate
-                                          )}
-                                        </span>
-                                      )}
+                              {type === "estimated" && (
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center space-x-2">
+                                    <StatusIcon
+                                      className={`h-4 w-4 ${paymentStatus.color}`}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span
+                                        className={`text-xs px-2 py-1 rounded-full font-medium ${paymentStatus.bgColor} ${paymentStatus.color}`}
+                                      >
+                                        {paymentStatus.label}
+                                      </span>
+                                      {paymentStatus.status === "virement" &&
+                                        paymentStatus.completionDate && (
+                                          <span className="text-xs text-blue-600 font-medium mt-1">
+                                            ✅ Terminé le:{" "}
+                                            {formatDate(
+                                              paymentStatus.completionDate
+                                            )}
+                                          </span>
+                                        )}
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
+                                </td>
+                              )}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-xs text-gray-600">
-                                  {sale.isPaid ? (
+                                  {type === "real" ? (
+                                    <div>
+                                      <p className="text-green-600 font-medium">
+                                        💰 Paiement reçu
+                                      </p>
+                                      <p className="text-gray-500">
+                                        Vente: {formatDate(sale.date)}
+                                      </p>
+                                      {sale.payments.length > 1 && (
+                                        <p className="text-blue-600">
+                                          📊 {sale.payments.length} paiements
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : sale.isPaid ? (
                                     <div>
                                       {sale.payments.length === 1 ? (
                                         <p>

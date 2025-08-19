@@ -169,6 +169,20 @@ export default function PendingPaymentsPage() {
     };
 
     loadData();
+
+    // Listen for data changes from other components
+    const handleDataChange = () => {
+      console.log(
+        "🔄 PendingPaymentsPage: Data change detected, refreshing..."
+      );
+      loadData();
+    };
+
+    window.addEventListener("saleDataChanged", handleDataChange);
+
+    return () => {
+      window.removeEventListener("saleDataChanged", handleDataChange);
+    };
   }, []);
 
   // Calculate total remaining amount safely
@@ -191,10 +205,15 @@ export default function PendingPaymentsPage() {
         amount: paymentAmount,
         date: new Date().toISOString(),
         note: paymentNote,
+        type: "virement", // Mark as virement payment
       };
 
       await addPayment(selectedSale.id, payment);
       console.log("✅ Payment added successfully");
+
+      // Dispatch event to notify other components about the data change
+      const event = new CustomEvent("saleDataChanged");
+      window.dispatchEvent(event);
 
       // Refresh data
       const allSales = await getSales();

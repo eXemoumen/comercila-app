@@ -283,7 +283,7 @@ export const deleteSale = async (saleId: string): Promise<boolean> => {
     }
 };
 
-export const updateSalePayment = async (saleId: string, isPaid: boolean): Promise<Sale | null> => {
+export const updateSalePayment = async (saleId: string, isPaid: boolean, paymentDate?: string): Promise<Sale | null> => {
     await initializeStorage();
 
     // Use Android offline storage if available
@@ -294,7 +294,7 @@ export const updateSalePayment = async (saleId: string, isPaid: boolean): Promis
             const sale = sales.find(s => s.id === saleId);
             if (sale) {
                 sale.isPaid = isPaid;
-                sale.paymentDate = new Date().toISOString();
+                sale.paymentDate = paymentDate || new Date().toISOString();
                 await offlineStorageManager.saveSale(sale);
                 return sale;
             }
@@ -305,9 +305,9 @@ export const updateSalePayment = async (saleId: string, isPaid: boolean): Promis
     }
 
     if (USE_SUPABASE.sales) {
-        return await updateSupabaseSalePayment(saleId, isPaid);
+        return await updateSupabaseSalePayment(saleId, isPaid, paymentDate);
     } else {
-        return updateLocalSalePayment(saleId, isPaid);
+        return updateLocalSalePayment(saleId, isPaid, paymentDate);
     }
 };
 

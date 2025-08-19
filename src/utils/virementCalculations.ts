@@ -68,10 +68,14 @@ export function calculateBenefitsForPeriod(sales: Sale[], startDate: Date, endDa
 
   // Calculate profit from paid sales only for the period
   const paidProfit = periodSales.reduce((acc, sale) => {
-    if (sale.isPaid) {
-      const benefitPerUnit =
-        sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
-      return acc + sale.quantity * benefitPerUnit;
+    if (sale.isPaid && sale.paymentDate) {
+      // For paid sales, check if the payment was made within the period
+      const paymentDate = new Date(sale.paymentDate);
+      if (paymentDate >= startDate && paymentDate <= endDate) {
+        const benefitPerUnit =
+          sale.pricePerUnit === 180 ? 25 : sale.pricePerUnit === 166 ? 17 : 0;
+        return acc + sale.quantity * benefitPerUnit;
+      }
     }
     return acc;
   }, 0);

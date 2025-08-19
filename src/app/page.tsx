@@ -19,8 +19,13 @@ import { SettingsPage } from "@/components/SettingsPage";
 import { Settings } from "lucide-react";
 
 export default function HomePage() {
-  const { dashboardData, monthlyBenefits, isLoading, error } =
-    useDashboardData();
+  const {
+    dashboardData,
+    monthlyBenefits,
+    monthlyPaidBenefits,
+    isLoading,
+    error,
+  } = useDashboardData();
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -136,7 +141,7 @@ export default function HomePage() {
             <DashboardOverview
               dashboardData={dashboardData}
               monthlyBenefits={monthlyBenefits}
-              onNavigate={setActiveTab}
+              monthlyPaidBenefits={monthlyPaidBenefits}
               isLoading={isLoading}
               error={error}
             />
@@ -235,7 +240,7 @@ export default function HomePage() {
             <DashboardOverview
               dashboardData={dashboardData}
               monthlyBenefits={monthlyBenefits}
-              onNavigate={setActiveTab}
+              monthlyPaidBenefits={monthlyPaidBenefits}
               isLoading={isLoading}
               error={error}
             />

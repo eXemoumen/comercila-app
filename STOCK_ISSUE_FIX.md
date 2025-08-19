@@ -324,3 +324,4 @@ After implementing the fix:
 
 The fix ensures that sales and stock updates are atomic - either both succeed or both fail, preventing the stock from getting out of sync with sales data.
 
+

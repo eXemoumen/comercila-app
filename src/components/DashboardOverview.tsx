@@ -50,9 +50,13 @@ export interface DashboardData {
 }
 
 export interface DashboardOverviewProps {
-  dashboardData: DashboardData;
-  monthlyBenefits: Record<string, MonthlyData>;
-  onNavigate?: (tab: string) => void;
+  dashboardData: {
+    monthlySales: MonthlySalesData;
+    salesData: Array<{ name: string; value: number }>;
+    fragranceStock: Array<{ name: string; value: number; color: string }>;
+  };
+  monthlyBenefits: Record<string, MonthlyData>; // Estimated benefits
+  monthlyPaidBenefits: Record<string, MonthlyData>; // Real benefits
   isLoading?: boolean;
   error?: string | null;
   className?: string;
@@ -62,6 +66,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
   function DashboardOverview({
     dashboardData,
     monthlyBenefits,
+    monthlyPaidBenefits,
     isLoading = false,
     error = null,
     className = "",
@@ -166,14 +171,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
           <h2 id="analytics-heading" className="sr-only">
             Analyses et graphiques
           </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Monthly Benefits Chart */}
-            <ChartErrorBoundary title="Bénéfices Mensuels">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Estimated Benefits Chart */}
+            <ChartErrorBoundary title="Bénéfices Estimés">
               <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
                 <div className="p-4 border-b">
                   <h3 className="text-sm font-medium text-gray-700">
-                    Bénéfices Mensuels (6 derniers mois)
+                    Bénéfices Estimés (6 derniers mois)
                   </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Basé sur la date de vente
+                  </p>
                 </div>
                 <div className="p-4">
                   <Suspense
@@ -187,6 +195,37 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
                       data={monthlyBenefits}
                       height={200}
                       currentMonthProfit={dashboardData.monthlySales.profit}
+                      type="estimated"
+                    />
+                  </Suspense>
+                </div>
+              </div>
+            </ChartErrorBoundary>
+
+            {/* Real Benefits Chart */}
+            <ChartErrorBoundary title="Bénéfices Réels">
+              <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
+                <div className="p-4 border-b">
+                  <h3 className="text-sm font-medium text-gray-700">
+                    Bénéfices Réels (6 derniers mois)
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Basé sur la date de paiement
+                  </p>
+                </div>
+                <div className="p-4">
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center h-[200px]">
+                        <div className="animate-pulse bg-gray-200 rounded w-full h-full"></div>
+                      </div>
+                    }
+                  >
+                    <MonthlyBenefitsChart
+                      data={monthlyPaidBenefits}
+                      height={200}
+                      currentMonthProfit={dashboardData.monthlySales.paidProfit}
+                      type="real"
                     />
                   </Suspense>
                 </div>
@@ -218,30 +257,33 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
                 </div>
               </div>
             </ChartErrorBoundary>
+          </div>
 
-            {/* Monthly History Table */}
+          {/* Monthly History Table - Full Width */}
+          <div className="mt-6">
             <ChartErrorBoundary title="Historique Mensuel">
-              <div className="lg:col-span-1">
-                <Suspense
-                  fallback={
-                    <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
-                      <div className="p-4 border-b">
-                        <div className="animate-pulse bg-gray-200 rounded h-4 w-32"></div>
-                      </div>
-                      <div className="p-4 space-y-3">
-                        {[...Array(4)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="animate-pulse bg-gray-200 rounded h-8 w-full"
-                          ></div>
-                        ))}
-                      </div>
+              <Suspense
+                fallback={
+                  <div className="bg-white rounded-xl shadow-md border-none overflow-hidden">
+                    <div className="p-4 border-b">
+                      <div className="animate-pulse bg-gray-200 rounded h-4 w-32"></div>
                     </div>
-                  }
-                >
-                  <MonthlyHistoryTable monthlyBenefits={monthlyBenefits} />
-                </Suspense>
-              </div>
+                    <div className="p-4 space-y-3">
+                      {[...Array(4)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="animate-pulse bg-gray-200 rounded h-8 w-full"
+                        ></div>
+                      ))}
+                    </div>
+                  </div>
+                }
+              >
+                <MonthlyHistoryTable
+                  monthlyBenefits={monthlyBenefits}
+                  monthlyPaidBenefits={monthlyPaidBenefits}
+                />
+              </Suspense>
             </ChartErrorBoundary>
           </div>
         </section>
@@ -262,7 +304,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = React.memo(
         <MonthlyBreakdownModal
           isOpen={showPaidModal}
           onClose={() => setShowPaidModal(false)}
-          monthlyBenefits={monthlyBenefits}
+          monthlyBenefits={monthlyPaidBenefits}
           title={`Bénéfice Réel (Payé) - ${
             dashboardData.monthlySales.virementPeriod || "mois en cours"
           }`}

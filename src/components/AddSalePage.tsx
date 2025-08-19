@@ -203,6 +203,7 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
                   : new Date().toISOString(),
                 amount: totalValue,
                 note: "Paiement complet",
+                type: "direct",
               },
             ]
           : [],
