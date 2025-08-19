@@ -97,7 +97,7 @@ export function calculateMonthlySales(allSales: Sale[], currentStock: number): M
     }, 0);
 
     // Calculate profit from paid sales only
-    const paidProfit = monthlySales.reduce((acc, sale) => {
+    const paidProfit = allSales.reduce((acc, sale) => {
         if (sale.isPaid && sale.paymentDate) {
             // For paid sales, check if the payment was made in the current month
             const paymentDate = new Date(sale.paymentDate);
@@ -106,11 +106,14 @@ export function calculateMonthlySales(allSales: Sale[], currentStock: number): M
                 paymentDate.getFullYear() === currentYear
             ) {
                 const benefitPerUnit = calculateProfitPerUnit(sale.pricePerUnit);
+                console.log(`💰 Real Benefit - Sale ${sale.id}: paymentDate=${sale.paymentDate}, benefit=${sale.quantity * benefitPerUnit}`);
                 return acc + sale.quantity * benefitPerUnit;
             }
         }
         return acc;
     }, 0);
+
+    console.log(`📊 Real Benefit Calculation - Current Month: ${currentMonth + 1}/${currentYear}, Total: ${paidProfit}`);
 
     // Calculate supplier payment amount
     const totalSupplierPayment = monthlySales.reduce((acc, sale) => {
