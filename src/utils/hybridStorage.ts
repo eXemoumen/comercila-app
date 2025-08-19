@@ -40,7 +40,7 @@ import {
 
 import { getMigrationStatus } from './migration';
 import { supabase } from '@/lib/supabase';
-import type { Sale, Order, Stock, Payment, Supermarket, FragranceStock } from './storage';
+import type { Sale, Order, Stock, Payment, Supermarket, FragranceStock, Fragrance } from './storage';
 // import { isAndroid } from './mobileConfig';
 import { offlineStorageManager } from './androidOfflineStorage';
 import { networkDetector } from './networkDetection';
@@ -48,6 +48,9 @@ import {
     getOfflineSales, 
     addOfflineSale, 
     getOfflineSupermarkets,
+    getOfflineFragranceStock,
+    updateOfflineFragranceStock,
+    getOfflineCurrentStock,
     syncCacheToOfflineStorage
 } from './localOfflineStorage';
 
@@ -564,11 +567,49 @@ export const updateStock = async (
             return actualCurrentStock;
         } catch (error) {
             console.error(`❌ Error updating stock:`, error);
-            throw error;
+            
+            // If Supabase fails, try offline storage as fallback
+            console.log('🔄 Supabase failed, trying offline storage fallback');
+            try {
+                // Update offline fragrance stock if distribution provided
+                if (fragranceDistribution) {
+                    for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
+                        const adjustedQty = type === 'adjusted' ? qty : (type === 'removed' ? -qty : qty);
+                        await updateOfflineFragranceStock(fragranceId, adjustedQty);
+                    }
+                }
+                
+                // Get current offline stock
+                const currentStock = await getOfflineCurrentStock();
+                console.log(`✅ Offline stock update completed. New total: ${currentStock}`);
+                return currentStock;
+            } catch (offlineError) {
+                console.error(`❌ Offline stock update also failed:`, offlineError);
+                throw error; // Throw original error
+            }
         }
     } else {
+        console.log('💾 Using local storage to update stock');
         return updateLocalStock(quantity, type, reason, fragranceDistribution);
     }
+};
+
+// Hybrid Fragrances Functions (static data - always works offline)
+export const getFragrances = async (): Promise<Fragrance[]> => {
+    // Fragrances are static data, so they always work offline
+    const DEFAULT_FRAGRANCES = [
+        { id: '1', name: 'Vanille', color: '#F59E0B' },
+        { id: '2', name: 'Chocolat', color: '#8B4513' },
+        { id: '3', name: 'Fraise', color: '#EF4444' },
+        { id: '4', name: 'Menthe', color: '#10B981' },
+        { id: '5', name: 'Orange', color: '#F97316' },
+        { id: '6', name: 'Citron', color: '#EAB308' },
+        { id: '7', name: 'Jasmin', color: '#10B981' },
+        { id: '8', name: 'Amande', color: '#8B5CF6' },
+    ];
+    
+    console.log('🌸 Returning fragrances (always available offline):', DEFAULT_FRAGRANCES.length, 'fragrances');
+    return DEFAULT_FRAGRANCES;
 };
 
 // Hybrid Fragrance Stock Functions
@@ -576,8 +617,57 @@ export const getFragranceStock = async (): Promise<FragranceStock[]> => {
     await initializeStorage();
 
     if (USE_SUPABASE.fragranceStock) {
-        return await getSupabaseFragranceStock();
+        try {
+            if (networkDetector.isOnline()) {
+                console.log('📊 Using Supabase for fragrance stock (online)');
+                const stock = await getSupabaseFragranceStock();
+                
+                // Cache the data for offline access
+                localStorage.setItem('cachedFragranceStock', JSON.stringify(stock));
+                localStorage.setItem('cachedFragranceStockTimestamp', Date.now().toString());
+                
+                // Also sync to offline storage
+                await syncCacheToOfflineStorage();
+                
+                return stock;
+            } else {
+                console.log('📱 Offline: Trying cached fragrance stock');
+                try {
+                    const cachedStock = localStorage.getItem('cachedFragranceStock');
+                    if (cachedStock) {
+                        const stock = JSON.parse(cachedStock);
+                        console.log('📱 Using cached fragrance stock (offline):', stock.length, 'items');
+                        return stock;
+                    }
+                } catch (error) {
+                    console.warn('❌ Failed to load cached fragrance stock:', error);
+                }
+                
+                // Final fallback to offline storage
+                console.log('💾 Using offline storage for fragrance stock (offline fallback)');
+                return getOfflineFragranceStock();
+            }
+        } catch (error) {
+            console.warn('❌ Failed to fetch from Supabase, falling back to cache:', error);
+            
+            // Try cache
+            try {
+                const cachedStock = localStorage.getItem('cachedFragranceStock');
+                if (cachedStock) {
+                    const stock = JSON.parse(cachedStock);
+                    console.log('📱 Using cached fragrance stock (fallback):', stock.length, 'items');
+                    return stock;
+                }
+            } catch (cacheError) {
+                console.warn('❌ Failed to load cached fragrance stock:', cacheError);
+            }
+            
+            // Final fallback to offline storage
+            console.log('💾 Using offline storage for fragrance stock (final fallback)');
+            return getOfflineFragranceStock();
+        }
     } else {
+        console.log('💾 Using local storage for fragrance stock');
         return getLocalFragranceStock();
     }
 };
