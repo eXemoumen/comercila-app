@@ -1,7 +1,7 @@
 workflows:
   android-build:
     name: Android Build
-    max_build_duration: 30
+    max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
       node: 20
@@ -10,6 +10,9 @@ workflows:
         NEXT_PUBLIC_SUPABASE_URL: "https://wiooeufthfytbflgtsnc.supabase.co"
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpb29ldWZ0aGZ5dGJmbGd0c25jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxOTI1NjQsImV4cCI6MjA3MDc2ODU2NH0.14ZbYsKHUgqZC6dZMhR_51Yf3F-mG_WRBpKO3cz_E7M"
     scripts:
+      - name: Set up local.properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
       - name: Install dependencies
         script: npm ci
       - name: Build Next.js
@@ -19,9 +22,10 @@ workflows:
       - name: Build Android APK
         script: |
           cd android
+          chmod +x gradlew
           ./gradlew assembleDebug
     artifacts:
-      - android/app/build/outputs/apk/**/*.apk
+      - android/app/build/outputs/**/*.apk
     publishing:
       email:
         recipients:
