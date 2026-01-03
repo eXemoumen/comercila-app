@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       node: 20
-      java: 17
+      java: 21
       vars:
         NEXT_PUBLIC_SUPABASE_URL: "https://wiooeufthfytbflgtsnc.supabase.co"
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpb29ldWZ0aGZ5dGJmbGd0c25jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxOTI1NjQsImV4cCI6MjA3MDc2ODU2NH0.14ZbYsKHUgqZC6dZMhR_51Yf3F-mG_WRBpKO3cz_E7M"
