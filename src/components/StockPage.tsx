@@ -67,7 +67,7 @@ export function StockPage({ onBack }: StockPageProps) {
     try {
       setIsHistoryLoading(true);
       const [history, currentStockData, fragStock] = await Promise.all([
-        getStockHistory(3),
+        getStockHistory(10),
         getCurrentStock(),
         getFragranceStock(),
       ]);
