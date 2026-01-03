@@ -20,6 +20,7 @@ import {
 import {
   getSupermarkets,
   addSale,
+  updateSale,
   deleteOrder,
   getFragranceStock,
   updateStock,
@@ -34,19 +35,43 @@ interface AddSalePageProps {
     quantity: number;
     orderId?: string;
   } | null;
+  editSale?: {
+    id: string;
+    supermarketId: string;
+    date: string;
+    cartons: number;
+    quantity: number;
+    pricePerUnit: number;
+    totalValue: number;
+    isPaid: boolean;
+    remainingAmount: number;
+    note?: string;
+    fragranceDistribution?: Record<string, number>;
+    paymentRendezvous?: PaymentRendezvous[];
+    payments: Array<{ id: string; date: string; amount: number; note?: string; type?: string }>;
+  } | null;
 }
 
-export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
-  const [supermarketId, setSupermarketId] = useState(preFillData?.supermarketId || "");
-  const [cartons, setCartons] = useState(preFillData ? Math.ceil(preFillData.quantity / 9) : 0);
-  const [priceOption, setPriceOption] = useState<"option1" | "option2">("option1");
-  const [isPaidImmediately, setIsPaidImmediately] = useState(false);
-  const [paymentNote, setPaymentNote] = useState("");
-  const [paymentRendezvous, setPaymentRendezvous] = useState<Omit<PaymentRendezvous, 'id' | 'isCompleted'>[]>([]);
+export function AddSalePage({ onBack, preFillData, editSale }: AddSalePageProps) {
+  const isEditMode = !!editSale;
+  const [supermarketId, setSupermarketId] = useState(editSale?.supermarketId || preFillData?.supermarketId || "");
+  const [cartons, setCartons] = useState(editSale?.cartons || (preFillData ? Math.ceil(preFillData.quantity / 9) : 0));
+  const [priceOption, setPriceOption] = useState<"option1" | "option2">(
+    editSale?.pricePerUnit === 180 && editSale?.totalValue === editSale?.quantity * 180 
+      ? (editSale?.totalValue / editSale?.quantity === 180 ? "option1" : "option2")
+      : "option1"
+  );
+  const [isPaidImmediately, setIsPaidImmediately] = useState(editSale?.isPaid || false);
+  const [paymentNote, setPaymentNote] = useState(editSale?.note || "");
+  const [paymentRendezvous, setPaymentRendezvous] = useState<Omit<PaymentRendezvous, 'id' | 'isCompleted'>[]>(
+    editSale?.paymentRendezvous?.map(rv => ({ date: rv.date, expectedAmount: rv.expectedAmount, note: rv.note })) || []
+  );
   const [newRendezvousDate, setNewRendezvousDate] = useState("");
   const [newRendezvousAmount, setNewRendezvousAmount] = useState("");
   const [newRendezvousNote, setNewRendezvousNote] = useState("");
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().split("T")[0]);
+  const [saleDate, setSaleDate] = useState(
+    editSale?.date ? new Date(editSale.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+  );
   const [fragranceStock, setFragranceStock] = useState<FragranceStock[]>([]);
   const [fragranceDistribution, setFragranceDistribution] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -67,18 +92,24 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         setAllSupermarkets(supermarkets);
         setFilteredSupermarkets(supermarkets);
 
-        const initialDistribution: Record<string, number> = {};
-        fragrances.forEach((fragrance: { id: string }) => {
-          initialDistribution[fragrance.id] = 0;
-        });
-        setFragranceDistribution(initialDistribution);
+        // Initialize fragrance distribution
+        if (editSale?.fragranceDistribution) {
+          // Use existing distribution from edit sale
+          setFragranceDistribution(editSale.fragranceDistribution);
+        } else {
+          const initialDistribution: Record<string, number> = {};
+          fragrances.forEach((fragrance: { id: string }) => {
+            initialDistribution[fragrance.id] = 0;
+          });
+          setFragranceDistribution(initialDistribution);
+        }
       } catch (error) {
         console.error("Error loading initial data:", error);
       }
     };
 
     loadData();
-  }, []);
+  }, [editSale]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -157,11 +188,14 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       return;
     }
 
-    for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
-      const fragrance = fragranceStock.find((f) => f.fragranceId === fragranceId);
-      if (fragrance && qty > fragrance.quantity) {
-        alert(`Stock insuffisant pour "${fragrance.name}". Disponible: ${fragrance.quantity} cartons.`);
-        return;
+    // Only check stock for new sales or if quantity increased in edit mode
+    if (!isEditMode) {
+      for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
+        const fragrance = fragranceStock.find((f) => f.fragranceId === fragranceId);
+        if (fragrance && qty > fragrance.quantity) {
+          alert(`Stock insuffisant pour "${fragrance.name}". Disponible: ${fragrance.quantity} cartons.`);
+          return;
+        }
       }
     }
 
@@ -176,42 +210,111 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         isCompleted: false,
       }));
 
-      const sale: Omit<Sale, "id"> = {
-        date: new Date(saleDate).toISOString(),
-        supermarketId,
-        quantity,
-        cartons,
-        pricePerUnit: selectedPrice.pricePerUnit,
-        totalValue,
-        isPaid: isPaidImmediately,
-        paymentDate: isPaidImmediately ? new Date(saleDate).toISOString() : undefined,
-        paymentNote: !isPaidImmediately ? paymentNote : "",
-        expectedPaymentDate: !isPaidImmediately && rendezvousWithIds.length > 0 ? rendezvousWithIds[0].date : "",
-        payments: isPaidImmediately
-          ? [{ id: Date.now().toString(), date: new Date(saleDate).toISOString(), amount: totalValue, note: "Paiement complet", type: "direct" }]
-          : [],
-        remainingAmount: isPaidImmediately ? 0 : totalValue,
-        fragranceDistribution: fragranceDistribution,
-        paymentRendezvous: !isPaidImmediately ? rendezvousWithIds : [],
-      };
+      if (isEditMode && editSale) {
+        // UPDATE MODE
+        // Calculate new remaining amount based on payments already made
+        const paidAmount = editSale.totalValue - editSale.remainingAmount;
+        const newRemainingAmount = Math.max(0, totalValue - paidAmount);
+        const newIsPaid = newRemainingAmount === 0;
 
-      const addedSale = await addSale(sale);
+        const updateData = {
+          date: new Date(saleDate).toISOString(),
+          supermarketId,
+          quantity,
+          cartons,
+          pricePerUnit: selectedPrice.pricePerUnit,
+          totalValue,
+          isPaid: isPaidImmediately || newIsPaid,
+          remainingAmount: isPaidImmediately ? 0 : newRemainingAmount,
+          note: paymentNote || undefined,
+          fragranceDistribution,
+          paymentRendezvous: !isPaidImmediately ? rendezvousWithIds : [],
+          expectedPaymentDate: !isPaidImmediately && rendezvousWithIds.length > 0 ? rendezvousWithIds[0].date : undefined,
+        };
 
-      if (!addedSale) throw new Error("Failed to add sale");
+        const result = await updateSale(editSale.id, updateData);
 
-      await updateStock(
-        -cartons,
-        "removed",
-        `Vente de ${cartons} cartons - ${new Date(saleDate).toLocaleDateString()}`,
-        fragranceDistribution
-      );
+        if (!result) {
+          throw new Error("Failed to update sale");
+        }
 
-      if (preFillData?.orderId) {
-        await deleteOrder(preFillData.orderId);
+        // Handle stock adjustment if cartons changed
+        const cartonsDiff = cartons - editSale.cartons;
+        if (cartonsDiff !== 0) {
+          // Calculate fragrance distribution difference
+          const oldDistribution = editSale.fragranceDistribution || {};
+          const diffDistribution: Record<string, number> = {};
+          
+          for (const fragranceId of Object.keys(fragranceDistribution)) {
+            const newQty = fragranceDistribution[fragranceId] || 0;
+            const oldQty = oldDistribution[fragranceId] || 0;
+            diffDistribution[fragranceId] = newQty - oldQty;
+          }
+
+          if (cartonsDiff > 0) {
+            // More cartons = remove from stock
+            await updateStock(
+              -cartonsDiff,
+              "removed",
+              `Modification vente: +${cartonsDiff} cartons`,
+              diffDistribution
+            );
+          } else {
+            // Less cartons = add back to stock
+            const positiveDistribution: Record<string, number> = {};
+            for (const [key, val] of Object.entries(diffDistribution)) {
+              positiveDistribution[key] = Math.abs(val);
+            }
+            await updateStock(
+              Math.abs(cartonsDiff),
+              "added",
+              `Modification vente: ${cartonsDiff} cartons`,
+              positiveDistribution
+            );
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent("saleDataChanged"));
+        onBack();
+      } else {
+        // CREATE MODE
+        const sale: Omit<Sale, "id"> = {
+          date: new Date(saleDate).toISOString(),
+          supermarketId,
+          quantity,
+          cartons,
+          pricePerUnit: selectedPrice.pricePerUnit,
+          totalValue,
+          isPaid: isPaidImmediately,
+          paymentDate: isPaidImmediately ? new Date(saleDate).toISOString() : undefined,
+          paymentNote: !isPaidImmediately ? paymentNote : "",
+          expectedPaymentDate: !isPaidImmediately && rendezvousWithIds.length > 0 ? rendezvousWithIds[0].date : "",
+          payments: isPaidImmediately
+            ? [{ id: Date.now().toString(), date: new Date(saleDate).toISOString(), amount: totalValue, note: "Paiement complet", type: "direct" }]
+            : [],
+          remainingAmount: isPaidImmediately ? 0 : totalValue,
+          fragranceDistribution: fragranceDistribution,
+          paymentRendezvous: !isPaidImmediately ? rendezvousWithIds : [],
+        };
+
+        const addedSale = await addSale(sale);
+
+        if (!addedSale) throw new Error("Failed to add sale");
+
+        await updateStock(
+          -cartons,
+          "removed",
+          `Vente de ${cartons} cartons - ${new Date(saleDate).toLocaleDateString()}`,
+          fragranceDistribution
+        );
+
+        if (preFillData?.orderId) {
+          await deleteOrder(preFillData.orderId);
+        }
+
+        window.dispatchEvent(new CustomEvent("saleDataChanged"));
+        onBack();
       }
-
-      window.dispatchEvent(new CustomEvent("saleDataChanged"));
-      onBack();
     } catch (error) {
       console.error("Error during sale process:", error);
       alert(`Erreur: ${error instanceof Error ? error.message : "Erreur inconnue"}`);
@@ -229,9 +332,11 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         </Button>
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            {preFillData ? "Confirmer la Livraison" : "Nouvelle Vente"}
+            {isEditMode ? "Modifier la Vente" : preFillData ? "Confirmer la Livraison" : "Nouvelle Vente"}
           </h1>
-          <p className="text-sm text-gray-500">Enregistrez une nouvelle transaction</p>
+          <p className="text-sm text-gray-500">
+            {isEditMode ? "Modifiez les détails de la vente" : "Enregistrez une nouvelle transaction"}
+          </p>
         </div>
       </div>
 
@@ -649,8 +754,10 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         {isSubmitting ? (
           <>
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            {preFillData ? "Confirmation..." : "Enregistrement..."}
+            {isEditMode ? "Modification..." : preFillData ? "Confirmation..." : "Enregistrement..."}
           </>
+        ) : isEditMode ? (
+          "Enregistrer les Modifications"
         ) : preFillData ? (
           "Confirmer la Livraison"
         ) : (

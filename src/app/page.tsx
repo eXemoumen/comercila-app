@@ -13,6 +13,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationsPage } from "@/components/NotificationsPage";
 import { RecapPage } from "@/components/RecapPage";
 import { RendezvousPage } from "@/components/RendezvousPage";
+import { SalesHistoryPage } from "@/components/SalesHistoryPage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -33,6 +34,21 @@ export default function HomePage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [selectedSupermarketId, setSelectedSupermarketId] =
     useState<string>("");
+  const [editSaleData, setEditSaleData] = useState<{
+    id: string;
+    supermarketId: string;
+    date: string;
+    cartons: number;
+    quantity: number;
+    pricePerUnit: number;
+    totalValue: number;
+    isPaid: boolean;
+    remainingAmount: number;
+    note?: string;
+    fragranceDistribution?: Record<string, number>;
+    paymentRendezvous?: Array<{ id: string; date: string; expectedAmount?: number; note?: string; isCompleted: boolean }>;
+    payments: Array<{ id: string; date: string; amount: number; note?: string; type?: string }>;
+  } | null>(null);
 
   useEffect(() => {
     // Add a simple test to see if the app loads
@@ -66,6 +82,13 @@ export default function HomePage() {
       setSelectedSupermarketId("");
     } else if (activeTab === "virements") {
       setActiveTab("dashboard");
+    } else if (activeTab === "add-sale") {
+      if (editSaleData) {
+        setEditSaleData(null);
+        setActiveTab("sales-history");
+      } else {
+        setActiveTab("dashboard");
+      }
     } else {
       setActiveTab("dashboard");
     }
@@ -154,7 +177,7 @@ export default function HomePage() {
         return <StockPage onBack={handleBack} />;
 
       case "add-sale":
-        return <AddSalePage onBack={handleBack} />;
+        return <AddSalePage onBack={handleBack} editSale={editSaleData} />;
 
       case "supermarkets":
         return (
@@ -204,6 +227,31 @@ export default function HomePage() {
 
       case "rendezvous":
         return <RendezvousPage onBack={handleBack} onNavigate={setActiveTab} />;
+
+      case "sales-history":
+        return (
+          <SalesHistoryPage
+            onBack={handleBack}
+            onEditSale={(sale) => {
+              setEditSaleData({
+                id: sale.id,
+                supermarketId: sale.supermarketId,
+                date: sale.date,
+                cartons: sale.cartons,
+                quantity: sale.quantity,
+                pricePerUnit: sale.pricePerUnit,
+                totalValue: sale.totalValue,
+                isPaid: sale.isPaid,
+                remainingAmount: sale.remainingAmount,
+                note: sale.note,
+                fragranceDistribution: sale.fragranceDistribution,
+                paymentRendezvous: sale.paymentRendezvous,
+                payments: sale.payments,
+              });
+              setActiveTab("add-sale");
+            }}
+          />
+        );
 
       case "find-supermarkets":
         // Show the find supermarkets page instead of redirecting

@@ -437,6 +437,30 @@ export const deleteSale = async (saleId: string): Promise<boolean> => {
     }
 };
 
+export const updateSale = async (saleId: string, updates: Partial<Omit<Sale, 'id' | 'payments'>>): Promise<Sale | null> => {
+    await initializeStorage();
+
+    if (USE_SUPABASE.sales) {
+        const { updateSupabaseSale } = await import('./supabaseStorage');
+        return await updateSupabaseSale(saleId, updates);
+    }
+    
+    // Local storage fallback
+    try {
+        const sales = await getLocalSales();
+        const saleIndex = sales.findIndex(s => s.id === saleId);
+        if (saleIndex === -1) return null;
+        
+        const updatedSale = { ...sales[saleIndex], ...updates };
+        sales[saleIndex] = updatedSale;
+        localStorage.setItem('soap_sales', JSON.stringify(sales));
+        return updatedSale;
+    } catch (error) {
+        console.error('Error updating sale:', error);
+        return null;
+    }
+};
+
 export const updateSalePayment = async (saleId: string, isPaid: boolean, paymentDate?: string): Promise<Sale | null> => {
     await initializeStorage();
 

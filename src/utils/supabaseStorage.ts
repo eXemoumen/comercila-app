@@ -122,6 +122,68 @@ export const addSupabaseSale = async (saleData: Omit<Sale, "id">): Promise<Sale 
     };
 };
 
+export const updateSupabaseSale = async (saleId: string, updates: Partial<Omit<Sale, 'id' | 'payments'>>): Promise<Sale | null> => {
+    try {
+        // Build the update object with snake_case keys
+        const updateData: Record<string, unknown> = {};
+        
+        if (updates.date !== undefined) updateData.date = updates.date;
+        if (updates.supermarketId !== undefined) updateData.supermarket_id = updates.supermarketId;
+        if (updates.quantity !== undefined) updateData.quantity = updates.quantity;
+        if (updates.cartons !== undefined) updateData.cartons = updates.cartons;
+        if (updates.pricePerUnit !== undefined) updateData.price_per_unit = updates.pricePerUnit;
+        if (updates.totalValue !== undefined) updateData.total_value = updates.totalValue;
+        if (updates.isPaid !== undefined) updateData.is_paid = updates.isPaid;
+        if (updates.paymentDate !== undefined) updateData.payment_date = updates.paymentDate;
+        if (updates.paymentNote !== undefined) updateData.payment_note = updates.paymentNote;
+        if (updates.expectedPaymentDate !== undefined) updateData.expected_payment_date = updates.expectedPaymentDate;
+        if (updates.remainingAmount !== undefined) updateData.remaining_amount = updates.remainingAmount;
+        if (updates.note !== undefined) updateData.note = updates.note;
+        if (updates.fragranceDistribution !== undefined) updateData.fragrance_distribution = updates.fragranceDistribution;
+        if (updates.paymentRendezvous !== undefined) updateData.payment_rendezvous = updates.paymentRendezvous;
+
+        const { data, error } = await supabase
+            .from("sales")
+            .update(updateData)
+            .eq("id", saleId)
+            .select(`*, payments (*)`)
+            .single();
+
+        if (error) {
+            console.error("Error updating sale:", error);
+            return null;
+        }
+
+        return {
+            id: data.id,
+            date: data.date,
+            supermarketId: data.supermarket_id,
+            quantity: data.quantity,
+            cartons: data.cartons,
+            pricePerUnit: data.price_per_unit,
+            totalValue: data.total_value,
+            isPaid: data.is_paid,
+            paymentDate: data.payment_date,
+            paymentNote: data.payment_note,
+            expectedPaymentDate: data.expected_payment_date,
+            payments: data.payments?.map((p: { id: string; date: string; amount: number; note: string }) => ({
+                id: p.id,
+                date: p.date,
+                amount: p.amount,
+                note: p.note
+            })) || [],
+            remainingAmount: data.remaining_amount,
+            fromOrder: data.from_order,
+            note: data.note,
+            fragranceDistribution: data.fragrance_distribution,
+            paymentRendezvous: data.payment_rendezvous || []
+        };
+    } catch (error) {
+        console.error("Error in updateSupabaseSale:", error);
+        return null;
+    }
+};
+
 export const deleteSupabaseSale = async (saleId: string): Promise<boolean> => {
     // Get the sale data before deleting for stock adjustment
     const { data: saleData } = await supabase

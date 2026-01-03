@@ -13,6 +13,7 @@ import {
   Sparkles,
   BarChart3,
   CalendarClock,
+  History,
 } from "lucide-react";
 import { preloadComponent } from "@/utils/preloadUtils";
 
@@ -91,6 +92,14 @@ const navigationItems: NavigationItem[] = [
     action: "navigate",
   },
   {
+    id: "sales-history",
+    label: "Historique",
+    description: "Historique des ventes",
+    icon: History,
+    color: "from-blue-500 to-indigo-600",
+    action: "navigate",
+  },
+  {
     id: "find-supermarkets",
     label: "Localiser",
     description: "Trouver sur la carte",
@@ -164,6 +173,9 @@ export function MobileNavigation({
         break;
       case "rendezvous":
         preloadComponent(() => import("@/components/RendezvousPage"));
+        break;
+      case "sales-history":
+        preloadComponent(() => import("@/components/SalesHistoryPage"));
         break;
     }
   }, []);
