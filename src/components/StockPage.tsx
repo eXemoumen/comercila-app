@@ -260,9 +260,9 @@ export function StockPage({ onBack }: StockPageProps) {
   const StatusIcon = stockStatus.icon;
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 max-w-5xl mx-auto">
       {/* Premium Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -273,71 +273,102 @@ export function StockPage({ onBack }: StockPageProps) {
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
-              <Package className="h-5 w-5 text-white" />
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
+              <Package className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Gestion du Stock</h1>
-              <p className="text-sm text-gray-500">Inventaire et mouvements</p>
+              <h1 className="text-xl lg:text-2xl font-bold text-gray-800">Gestion du Stock</h1>
+              <p className="text-sm lg:text-base text-gray-500">Inventaire et mouvements</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Current Stock Card - Premium Design */}
-      <div className="premium-card overflow-hidden animate-fade-in-up">
-        <div className="relative p-6">
-          {/* Gradient accent bar */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500" />
-          
-          {/* Background decoration */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full -translate-y-1/2 translate-x-1/2 opacity-50" />
-          
-          <div className="relative">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
-                  <Package className="h-4 w-4 text-purple-600" />
+      {/* Two Column Layout for larger screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column - Current Stock Card */}
+        <div className="premium-card overflow-hidden animate-fade-in-up">
+          <div className="relative p-6">
+            {/* Gradient accent bar */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500" />
+            
+            {/* Background decoration */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full -translate-y-1/2 translate-x-1/2 opacity-50" />
+            
+            <div className="relative">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
+                    <Package className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-500">Stock Actuel</span>
                 </div>
-                <span className="text-sm font-medium text-gray-500">Stock Actuel</span>
+                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                  stockStatus.color === 'emerald' ? 'bg-emerald-100 text-emerald-700' :
+                  stockStatus.color === 'amber' ? 'bg-amber-100 text-amber-700' :
+                  'bg-red-100 text-red-700'
+                }`}>
+                  <StatusIcon className="h-3.5 w-3.5" />
+                  {stockStatus.label}
+                </div>
               </div>
-              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-                stockStatus.color === 'emerald' ? 'bg-emerald-100 text-emerald-700' :
-                stockStatus.color === 'amber' ? 'bg-amber-100 text-amber-700' :
-                'bg-red-100 text-red-700'
-              }`}>
-                <StatusIcon className="h-3.5 w-3.5" />
-                {stockStatus.label}
-              </div>
-            </div>
 
-            <div className="text-center py-4">
-              <div className="text-5xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                {currentStock}
+              <div className="text-center py-4">
+                <div className="text-5xl lg:text-6xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
+                  {currentStock}
+                </div>
+                <p className="text-gray-500 mt-1">cartons</p>
               </div>
-              <p className="text-gray-500 mt-1">cartons</p>
-            </div>
 
-            {/* Progress bar */}
-            <div className="mt-4">
-              <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500"
-                  style={{ width: `${stockPercentage}%` }}
-                />
+              {/* Progress bar */}
+              <div className="mt-4">
+                <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500"
+                    style={{ width: `${stockPercentage}%` }}
+                  />
+                </div>
+                <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+                  <span>0</span>
+                  <span className="font-medium text-purple-600">{stockPercentage.toFixed(1)}%</span>
+                  <span>300 cartons</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
-                <span>0</span>
-                <span className="font-medium text-purple-600">{stockPercentage.toFixed(1)}%</span>
-                <span>300 cartons</span>
-              </div>
-            </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-2 text-sm text-gray-600">
-              <Sparkles className="h-4 w-4 text-purple-500" />
-              <span className="font-medium">{currentStock * 9}</span>
-              <span>pièces au total</span>
+              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-2 text-sm text-gray-600">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                <span className="font-medium">{currentStock * 9}</span>
+                <span>pièces au total</span>
+              </div>
             </div>
+          </div>
+        </div>
+
+        {/* Right Column - Action Buttons */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              size="lg"
+              className="h-14 lg:h-16 rounded-xl font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 transition-all hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5"
+              onClick={() => {
+                setShowAddForm(true);
+                resetAddForm();
+              }}
+            >
+              <Plus className="mr-2 h-5 w-5" />
+              Ajouter Stock
+            </Button>
+            <Button
+              size="lg"
+              className="h-14 lg:h-16 rounded-xl font-semibold bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg shadow-purple-500/25 transition-all hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5"
+              onClick={() => {
+                setShowAdjustForm(true);
+                resetAdjustForm();
+              }}
+            >
+              <Settings className="mr-2 h-5 w-5" />
+              Ajuster Stock
+            </Button>
           </div>
         </div>
       </div>
@@ -348,10 +379,10 @@ export function StockPage({ onBack }: StockPageProps) {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center">
             <Droplets className="h-4 w-4 text-pink-600" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-800">Stock par Parfum</h2>
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-800">Stock par Parfum</h2>
         </div>
         
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 lg:gap-4">
           {fragranceStock.map((fragrance, index) => (
             <div
               key={fragrance.fragranceId}
@@ -386,36 +417,10 @@ export function StockPage({ onBack }: StockPageProps) {
         </div>
       </div>
 
-      {/* Action Buttons - Premium Design */}
-      <div className="grid grid-cols-2 gap-3 animate-fade-in-up stagger-2">
-        <Button
-          size="lg"
-          className="h-14 rounded-xl font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 transition-all hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5"
-          onClick={() => {
-            setShowAddForm(true);
-            resetAddForm();
-          }}
-        >
-          <Plus className="mr-2 h-5 w-5" />
-          Ajouter Stock
-        </Button>
-        <Button
-          size="lg"
-          className="h-14 rounded-xl font-semibold bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg shadow-purple-500/25 transition-all hover:shadow-xl hover:shadow-purple-500/30 hover:-translate-y-0.5"
-          onClick={() => {
-            setShowAdjustForm(true);
-            resetAdjustForm();
-          }}
-        >
-          <Settings className="mr-2 h-5 w-5" />
-          Ajuster Stock
-        </Button>
-      </div>
-
       {/* Add Stock Form - Premium Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="premium-card w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in">
+          <div className="premium-card w-full max-w-md lg:max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in">
             {/* Header */}
             <div className="sticky top-0 bg-white border-b border-gray-100 p-4 rounded-t-2xl">
               <div className="flex items-center justify-between">
@@ -614,7 +619,7 @@ export function StockPage({ onBack }: StockPageProps) {
       {/* Adjust Stock Form - Premium Modal */}
       {showAdjustForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="premium-card w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in">
+          <div className="premium-card w-full max-w-md lg:max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in">
             {/* Header */}
             <div className="sticky top-0 bg-white border-b border-gray-100 p-4 rounded-t-2xl">
               <div className="flex items-center justify-between">

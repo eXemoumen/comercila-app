@@ -159,20 +159,20 @@ export function SalesHistoryPage({ onBack, onEditSale }: SalesHistoryPageProps) 
 
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={onBack} className="rounded-xl hover:bg-white/80">
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-              <Clock className="h-5 w-5 text-white" />
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+              <Clock className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Historique des Ventes</h1>
-              <p className="text-sm text-gray-500">{stats.total} vente(s) enregistrée(s)</p>
+              <h1 className="text-xl lg:text-2xl font-bold text-gray-800">Historique des Ventes</h1>
+              <p className="text-sm lg:text-base text-gray-500">{stats.total} vente(s) enregistrée(s)</p>
             </div>
           </div>
         </div>
@@ -182,29 +182,29 @@ export function SalesHistoryPage({ onBack, onEditSale }: SalesHistoryPageProps) 
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-3">
-        <div className="premium-card p-3 text-center">
-          <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-          <p className="text-xs text-gray-500">Total</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:gap-4">
+        <div className="premium-card p-3 lg:p-4 text-center">
+          <p className="text-2xl lg:text-3xl font-bold text-gray-800">{stats.total}</p>
+          <p className="text-xs lg:text-sm text-gray-500">Total</p>
         </div>
-        <div className="premium-card p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-600">{stats.paid}</p>
-          <p className="text-xs text-gray-500">Payées</p>
+        <div className="premium-card p-3 lg:p-4 text-center">
+          <p className="text-2xl lg:text-3xl font-bold text-emerald-600">{stats.paid}</p>
+          <p className="text-xs lg:text-sm text-gray-500">Payées</p>
         </div>
-        <div className="premium-card p-3 text-center">
-          <p className="text-2xl font-bold text-red-600">{stats.unpaid}</p>
-          <p className="text-xs text-gray-500">Non payées</p>
+        <div className="premium-card p-3 lg:p-4 text-center">
+          <p className="text-2xl lg:text-3xl font-bold text-red-600">{stats.unpaid}</p>
+          <p className="text-xs lg:text-sm text-gray-500">Non payées</p>
         </div>
-        <div className="premium-card p-3 text-center">
-          <p className="text-lg font-bold text-blue-600">{(stats.totalValue / 1000).toFixed(0)}K</p>
-          <p className="text-xs text-gray-500">DZD</p>
+        <div className="premium-card p-3 lg:p-4 text-center">
+          <p className="text-lg lg:text-2xl font-bold text-blue-600">{(stats.totalValue / 1000).toFixed(0)}K</p>
+          <p className="text-xs lg:text-sm text-gray-500">DZD</p>
         </div>
       </div>
 
       {/* Search and Filters */}
       <div className="premium-card p-4 space-y-4">
         {/* Search */}
-        <div className="relative">
+        <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             placeholder="Rechercher par supermarché..."
@@ -215,7 +215,7 @@ export function SalesHistoryPage({ onBack, onEditSale }: SalesHistoryPageProps) 
         </div>
 
         {/* Filters Row */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <div className="flex items-center gap-1">
             <Filter className="h-4 w-4 text-gray-400" />
           </div>
@@ -237,7 +237,7 @@ export function SalesHistoryPage({ onBack, onEditSale }: SalesHistoryPageProps) 
             </button>
           ))}
           
-          <div className="h-6 w-px bg-gray-200 mx-2" />
+          <div className="h-6 w-px bg-gray-200 mx-2 hidden sm:block" />
           
           <select
             value={sortBy}
@@ -265,7 +265,7 @@ export function SalesHistoryPage({ onBack, onEditSale }: SalesHistoryPageProps) 
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filteredSales.map((sale, index) => {
             const isExpanded = expandedSaleId === sale.id;
             const progressPercent = ((sale.totalValue - sale.remainingAmount) / sale.totalValue) * 100;

@@ -134,8 +134,8 @@ export default function HomePage() {
       case "dashboard":
         return (
           <div className="space-y-6 pb-20">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold text-gray-800">
+            <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
                 Tableau de Bord
               </h1>
               <div className="flex items-center space-x-2">

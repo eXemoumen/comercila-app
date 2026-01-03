@@ -56,7 +56,7 @@ export function DashboardLayout({
   }, [showMobileMenu, handleMobileMenuClose]);
 
   return (
-    <main className="container max-w-md mx-auto p-4 bg-gradient-to-b from-gray-50 to-white min-h-screen">
+    <main className="w-full max-w-md sm:max-w-2xl lg:max-w-5xl xl:max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white min-h-screen">
       {/* Navigation Header */}
       <NavigationTabs
         activeTab={activeTab}
@@ -74,8 +74,8 @@ export function DashboardLayout({
       />
 
       {/* Main Content Area */}
-      <div className="pt-16 transition-all duration-200 ease-in-out">
-        <div className="space-y-4">{children}</div>
+      <div className="pt-16 lg:pt-20 transition-all duration-200 ease-in-out">
+        <div className="space-y-4 lg:space-y-6">{children}</div>
       </div>
     </main>
   );

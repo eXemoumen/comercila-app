@@ -38,8 +38,6 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
     onProfitCardClick,
     onPaidProfitCardClick,
   }) {
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-
     // Calculate some derived metrics for better insights
     const cartonsFromQuantity = Math.floor(metrics.quantity / 9);
     const stockInCartons = Math.floor(metrics.fragmentStock / 9);
@@ -50,16 +48,16 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
     return (
       <div className={`space-y-6 ${className}`}>
         {/* Section Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30">
-              <BarChart3 className="h-5 w-5 text-white" />
+            <div className="flex items-center justify-center w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30">
+              <BarChart3 className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">
+              <h2 className="text-xl lg:text-2xl font-bold text-gray-900">
                 Métriques du Mois
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm lg:text-base text-gray-500">
                 Vue d&apos;ensemble de vos performances
               </p>
             </div>
@@ -76,13 +74,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
         </div>
 
         {/* Main Metrics Grid */}
-        <div
-          className={`grid gap-4 ${
-            isMobile
-              ? "grid-cols-1"
-              : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
-          }`}
-        >
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {/* Revenue Card */}
           <div className="animate-fade-in-up stagger-1">
             <MetricCard

@@ -188,9 +188,9 @@ export function RendezvousPage({ onBack }: RendezvousPageProps) {
 
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -201,12 +201,12 @@ export function RendezvousPage({ onBack }: RendezvousPageProps) {
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <CalendarClock className="h-5 w-5 text-white" />
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+              <CalendarClock className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Rendez-vous</h1>
-              <p className="text-sm text-gray-500">{stats.total} rendez-vous de paiement</p>
+              <h1 className="text-xl lg:text-2xl font-bold text-gray-800">Rendez-vous</h1>
+              <p className="text-sm lg:text-base text-gray-500">{stats.total} rendez-vous de paiement</p>
             </div>
           </div>
         </div>
@@ -221,27 +221,27 @@ export function RendezvousPage({ onBack }: RendezvousPageProps) {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-3 gap-3 lg:gap-4">
         <div className="premium-card p-4 text-center">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-2">
-            <Clock className="h-5 w-5 text-amber-600" />
+          <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-2">
+            <Clock className="h-5 w-5 lg:h-6 lg:w-6 text-amber-600" />
           </div>
-          <p className="text-2xl font-bold text-gray-800">{stats.todayCount}</p>
-          <p className="text-xs text-gray-500">Aujourd&apos;hui</p>
+          <p className="text-2xl lg:text-3xl font-bold text-gray-800">{stats.todayCount}</p>
+          <p className="text-xs lg:text-sm text-gray-500">Aujourd&apos;hui</p>
         </div>
         <div className="premium-card p-4 text-center">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center mx-auto mb-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
+          <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center mx-auto mb-2">
+            <AlertTriangle className="h-5 w-5 lg:h-6 lg:w-6 text-red-600" />
           </div>
-          <p className="text-2xl font-bold text-red-600">{stats.overdueCount}</p>
-          <p className="text-xs text-gray-500">En retard</p>
+          <p className="text-2xl lg:text-3xl font-bold text-red-600">{stats.overdueCount}</p>
+          <p className="text-xs lg:text-sm text-gray-500">En retard</p>
         </div>
         <div className="premium-card p-4 text-center">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center mx-auto mb-2">
-            <DollarSign className="h-5 w-5 text-emerald-600" />
+          <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center mx-auto mb-2">
+            <DollarSign className="h-5 w-5 lg:h-6 lg:w-6 text-emerald-600" />
           </div>
-          <p className="text-lg font-bold text-emerald-600">{stats.totalExpected.toLocaleString("fr-DZ")}</p>
-          <p className="text-xs text-gray-500">DZD attendus</p>
+          <p className="text-lg lg:text-2xl font-bold text-emerald-600">{stats.totalExpected.toLocaleString("fr-DZ")}</p>
+          <p className="text-xs lg:text-sm text-gray-500">DZD attendus</p>
         </div>
       </div>
 

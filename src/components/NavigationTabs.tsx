@@ -32,24 +32,24 @@ export function NavigationTabs({
 
   return (
     <div
-      className={`fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex justify-between items-center h-16 px-4 shadow-sm z-50 ${className}`}
+      className={`fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex justify-between items-center h-16 lg:h-20 px-4 sm:px-6 lg:px-8 shadow-sm z-50 ${className}`}
       role="navigation"
       aria-label="Navigation principale"
     >
       {/* Logo & Home Button */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-            <Sparkles className="w-5 h-5 text-white" />
+      <div className="flex items-center gap-3 lg:gap-4">
+        <div className="flex items-center gap-2 lg:gap-3">
+          <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+            <Sparkles className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
           </div>
-          <span className="font-bold text-gray-900 hidden sm:block">TopFresh</span>
+          <span className="font-bold text-gray-900 hidden sm:block lg:text-lg">TopFresh</span>
         </div>
         
         <div className="h-6 w-px bg-gray-200 hidden sm:block" />
         
         <Button
           variant="ghost"
-          className={`flex items-center h-10 px-4 rounded-xl transition-all duration-200 ${
+          className={`flex items-center h-10 lg:h-11 px-4 lg:px-5 rounded-xl transition-all duration-200 ${
             activeTab === "dashboard"
               ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40"
               : "text-gray-600 hover:bg-gray-100"
@@ -59,8 +59,8 @@ export function NavigationTabs({
           aria-pressed={activeTab === "dashboard"}
           aria-label="Aller au tableau de bord"
         >
-          <Home className="h-4 w-4" aria-hidden="true" />
-          <span className="ml-2 font-medium hidden sm:inline">
+          <Home className="h-4 w-4 lg:h-5 lg:w-5" aria-hidden="true" />
+          <span className="ml-2 font-medium hidden sm:inline lg:text-base">
             Tableau de Bord
           </span>
         </Button>
@@ -70,13 +70,13 @@ export function NavigationTabs({
       <Button
         variant="ghost"
         size="icon"
-        className="h-10 w-10 rounded-xl hover:bg-gray-100 transition-colors"
+        className="h-10 w-10 lg:h-11 lg:w-11 rounded-xl hover:bg-gray-100 transition-colors"
         onClick={onToggleMobileMenu}
         onKeyDown={handleMenuKeyDown}
         aria-label="Ouvrir le menu de navigation"
         aria-expanded="false"
       >
-        <Menu className="h-5 w-5 text-gray-600" aria-hidden="true" />
+        <Menu className="h-5 w-5 lg:h-6 lg:w-6 text-gray-600" aria-hidden="true" />
       </Button>
     </div>
   );
