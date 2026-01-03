@@ -11,6 +11,7 @@ import { SupermarketProfilePage } from "@/components/SupermarketProfilePage";
 import { VirementsPage } from "@/components/VirementsPage";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationsPage } from "@/components/NotificationsPage";
+import { RecapPage } from "@/components/RecapPage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -196,6 +197,9 @@ export default function HomePage() {
             onNavigate={setActiveTab}
           />
         );
+
+      case "recap":
+        return <RecapPage onBack={handleBack} />;
 
       case "find-supermarkets":
         // Show the find supermarkets page instead of redirecting

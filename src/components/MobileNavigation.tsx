@@ -11,6 +11,7 @@ import {
   AlertCircle,
   X,
   Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { preloadComponent } from "@/utils/preloadUtils";
 
@@ -70,6 +71,14 @@ const navigationItems: NavigationItem[] = [
     description: "Paiements en attente",
     icon: AlertCircle,
     color: "from-rose-500 to-pink-600",
+    action: "navigate",
+  },
+  {
+    id: "recap",
+    label: "Récapitulatif",
+    description: "Analyses et statistiques",
+    icon: BarChart3,
+    color: "from-indigo-500 to-purple-600",
     action: "navigate",
   },
   {
@@ -140,6 +149,9 @@ export function MobileNavigation({
         break;
       case "stock":
         preloadComponent(() => import("@/components/StockPage"));
+        break;
+      case "recap":
+        preloadComponent(() => import("@/components/RecapPage"));
         break;
     }
   }, []);
