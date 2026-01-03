@@ -49,7 +49,8 @@ export const getSupabaseSales = async (): Promise<Sale[]> => {
         remainingAmount: s.remaining_amount,
         fromOrder: s.from_order,
         note: s.note,
-        fragranceDistribution: s.fragrance_distribution
+        fragranceDistribution: s.fragrance_distribution,
+        paymentRendezvous: s.payment_rendezvous || []
     })) || [];
 
     console.log('🔄 Processed sales data:', sales);
@@ -72,7 +73,8 @@ export const addSupabaseSale = async (saleData: Omit<Sale, "id">): Promise<Sale 
         remaining_amount: saleData.remainingAmount,
         from_order: saleData.fromOrder || false,
         note: saleData.note || null,
-        fragrance_distribution: saleData.fragranceDistribution || null
+        fragrance_distribution: saleData.fragranceDistribution || null,
+        payment_rendezvous: saleData.paymentRendezvous || null
     };
 
     const { data, error } = await supabase
@@ -115,7 +117,8 @@ export const addSupabaseSale = async (saleData: Omit<Sale, "id">): Promise<Sale 
         remainingAmount: data.remaining_amount,
         fromOrder: data.from_order,
         note: data.note,
-        fragranceDistribution: data.fragrance_distribution
+        fragranceDistribution: data.fragrance_distribution,
+        paymentRendezvous: data.payment_rendezvous || []
     };
 };
 
@@ -253,6 +256,96 @@ export const updateSupabaseSalePayment = async (saleId: string, isPaid: boolean,
         note: data.note,
         fragranceDistribution: data.fragrance_distribution
     };
+};
+
+export const markRendezvousAsCompleted = async (saleId: string, rendezvousId: string): Promise<boolean> => {
+    try {
+        // First get the current sale to get the payment_rendezvous array
+        const { data: currentSale, error: fetchError } = await supabase
+            .from("sales")
+            .select("payment_rendezvous")
+            .eq("id", saleId)
+            .single();
+
+        if (fetchError) {
+            console.error("Error fetching sale for rendezvous update:", fetchError);
+            return false;
+        }
+
+        // Update the specific rendezvous in the array
+        const rendezvousList = currentSale.payment_rendezvous || [];
+        const updatedRendezvous = rendezvousList.map((rv: { id: string; isCompleted: boolean; completedDate?: string }) => {
+            if (rv.id === rendezvousId) {
+                return {
+                    ...rv,
+                    isCompleted: true,
+                    completedDate: new Date().toISOString()
+                };
+            }
+            return rv;
+        });
+
+        // Update the sale with the modified rendezvous array
+        const { error: updateError } = await supabase
+            .from("sales")
+            .update({ payment_rendezvous: updatedRendezvous })
+            .eq("id", saleId);
+
+        if (updateError) {
+            console.error("Error updating rendezvous:", updateError);
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Error in markRendezvousAsCompleted:", error);
+        return false;
+    }
+};
+
+export const addRendezvousToSale = async (saleId: string, rendezvous: { date: string; expectedAmount?: number; note?: string }): Promise<boolean> => {
+    try {
+        // First get the current sale to get the payment_rendezvous array
+        const { data: currentSale, error: fetchError } = await supabase
+            .from("sales")
+            .select("payment_rendezvous")
+            .eq("id", saleId)
+            .single();
+
+        if (fetchError) {
+            console.error("Error fetching sale for adding rendezvous:", fetchError);
+            return false;
+        }
+
+        // Create new rendezvous with ID
+        const newRendezvous = {
+            id: `rv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            date: rendezvous.date,
+            expectedAmount: rendezvous.expectedAmount,
+            note: rendezvous.note,
+            isCompleted: false
+        };
+
+        // Add to existing array or create new one
+        const rendezvousList = currentSale.payment_rendezvous || [];
+        rendezvousList.push(newRendezvous);
+
+        // Update the sale with the new rendezvous array
+        const { error: updateError } = await supabase
+            .from("sales")
+            .update({ payment_rendezvous: rendezvousList })
+            .eq("id", saleId);
+
+        if (updateError) {
+            console.error("Error adding rendezvous:", updateError);
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Error in addRendezvousToSale:", error);
+        return false;
+    }
 };
 
 // Orders CRUD

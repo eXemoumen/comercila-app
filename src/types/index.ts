@@ -6,6 +6,15 @@ export interface Payment {
   type?: 'virement' | 'direct' | 'other'; // Payment type to track virement payments
 }
 
+export interface PaymentRendezvous {
+  id: string;
+  date: string;
+  expectedAmount?: number;
+  note?: string;
+  isCompleted: boolean;
+  completedDate?: string;
+}
+
 export interface Sale {
   id: string;
   date: string;
@@ -23,6 +32,7 @@ export interface Sale {
   fromOrder?: boolean;
   note?: string;
   fragranceDistribution?: Record<string, number>;
+  paymentRendezvous?: PaymentRendezvous[];
 }
 
 export interface Supermarket {

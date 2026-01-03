@@ -19,8 +19,9 @@ import {
   CreditCard,
   Store,
   Package,
+  CalendarClock,
 } from "lucide-react";
-import { getSales, getSupermarkets, addPayment } from "@/utils/hybridStorage";
+import { getSales, getSupermarkets, addPayment, addRendezvousToSale } from "@/utils/hybridStorage";
 import {
   calculateVirementPeriod,
   calculateSupplierReturn,
@@ -56,6 +57,10 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [addNextRendezvous, setAddNextRendezvous] = useState(false);
+  const [nextRendezvousDate, setNextRendezvousDate] = useState("");
+  const [nextRendezvousAmount, setNextRendezvousAmount] = useState("");
+  const [nextRendezvousNote, setNextRendezvousNote] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
@@ -162,6 +167,15 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
         throw new Error("Failed to add payment");
       }
 
+      // Add next rendezvous if specified
+      if (addNextRendezvous && nextRendezvousDate) {
+        await addRendezvousToSale(selectedSale.id, {
+          date: nextRendezvousDate,
+          expectedAmount: nextRendezvousAmount ? parseFloat(nextRendezvousAmount) : undefined,
+          note: nextRendezvousNote || undefined,
+        });
+      }
+
       const updatedSales = await getSales();
       setSales(updatedSales);
 
@@ -171,6 +185,10 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
       setSelectedSale(null);
       setPaymentAmount("");
       setPaymentNote("");
+      setAddNextRendezvous(false);
+      setNextRendezvousDate("");
+      setNextRendezvousAmount("");
+      setNextRendezvousNote("");
 
       const event = new CustomEvent("saleDataChanged");
       window.dispatchEvent(event);
@@ -498,14 +516,18 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
             setSelectedSale(null);
             setPaymentAmount("");
             setPaymentNote("");
+            setAddNextRendezvous(false);
+            setNextRendezvousDate("");
+            setNextRendezvousAmount("");
+            setNextRendezvousNote("");
           }}
         >
           <div
-            className="premium-card w-full max-w-md animate-scale-in"
+            className="premium-card w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="border-b border-gray-100 p-4">
+            <div className="border-b border-gray-100 p-4 sticky top-0 bg-white z-10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
@@ -525,6 +547,10 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
                     setSelectedSale(null);
                     setPaymentAmount("");
                     setPaymentNote("");
+                    setAddNextRendezvous(false);
+                    setNextRendezvousDate("");
+                    setNextRendezvousAmount("");
+                    setNextRendezvousNote("");
                   }}
                 >
                   <X className="h-5 w-5" />
@@ -598,6 +624,89 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
                     className="w-full h-12 rounded-xl border-2 border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
                   />
                 </div>
+
+                {/* Next Rendezvous Section */}
+                <div className="pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setAddNextRendezvous(!addNextRendezvous)}
+                    className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
+                      addNextRendezvous
+                        ? "border-indigo-500 bg-indigo-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        addNextRendezvous
+                          ? "bg-indigo-100"
+                          : "bg-gray-100"
+                      }`}>
+                        <CalendarClock className={`h-5 w-5 ${
+                          addNextRendezvous ? "text-indigo-600" : "text-gray-500"
+                        }`} />
+                      </div>
+                      <div>
+                        <p className={`font-semibold ${
+                          addNextRendezvous ? "text-indigo-800" : "text-gray-800"
+                        }`}>
+                          Ajouter un prochain rendez-vous
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Planifier le prochain paiement
+                        </p>
+                      </div>
+                      <div className={`ml-auto w-6 h-6 rounded-lg border-2 flex items-center justify-center ${
+                        addNextRendezvous
+                          ? "bg-indigo-500 border-indigo-500"
+                          : "border-gray-300"
+                      }`}>
+                        {addNextRendezvous && (
+                          <CheckCircle2 className="h-4 w-4 text-white" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+
+                  {addNextRendezvous && (
+                    <div className="mt-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 space-y-3 animate-fade-in-up">
+                      <div>
+                        <label className="text-xs font-medium text-indigo-700 mb-1 block">
+                          Date du rendez-vous *
+                        </label>
+                        <Input
+                          type="date"
+                          value={nextRendezvousDate}
+                          onChange={(e) => setNextRendezvousDate(e.target.value)}
+                          className="w-full h-10 rounded-lg border border-indigo-200 focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-indigo-700 mb-1 block">
+                          Montant prévu (optionnel)
+                        </label>
+                        <Input
+                          type="number"
+                          value={nextRendezvousAmount}
+                          onChange={(e) => setNextRendezvousAmount(e.target.value)}
+                          placeholder="Ex: 5000"
+                          className="w-full h-10 rounded-lg border border-indigo-200 focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-indigo-700 mb-1 block">
+                          Note (optionnel)
+                        </label>
+                        <Input
+                          value={nextRendezvousNote}
+                          onChange={(e) => setNextRendezvousNote(e.target.value)}
+                          placeholder="Ex: Paiement partiel..."
+                          className="w-full h-10 rounded-lg border border-indigo-200 focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -607,20 +716,24 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
                     try {
                       await handleAddPayment();
                       setShowPaymentModal(false);
+                      setAddNextRendezvous(false);
+                      setNextRendezvousDate("");
+                      setNextRendezvousAmount("");
+                      setNextRendezvousNote("");
                     } catch (error) {
                       console.error("Error in modal payment:", error);
                     }
                   }}
-                  disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+                  disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || (addNextRendezvous && !nextRendezvousDate)}
                   className={`flex-1 h-12 rounded-xl font-semibold shadow-lg transition-all ${
-                    paymentAmount && parseFloat(paymentAmount) > 0
+                    paymentAmount && parseFloat(paymentAmount) > 0 && (!addNextRendezvous || nextRendezvousDate)
                       ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/25"
                       : "bg-gray-200 text-gray-400 cursor-not-allowed"
                   }`}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   {paymentAmount && parseFloat(paymentAmount) > 0
-                    ? "Ajouter le Paiement"
+                    ? addNextRendezvous ? "Ajouter + RDV" : "Ajouter le Paiement"
                     : "Entrez un montant"}
                 </Button>
 
@@ -630,6 +743,10 @@ export const VirementsPage: React.FC<VirementsPageProps> = ({ onBack }) => {
                     setSelectedSale(null);
                     setPaymentAmount("");
                     setPaymentNote("");
+                    setAddNextRendezvous(false);
+                    setNextRendezvousDate("");
+                    setNextRendezvousAmount("");
+                    setNextRendezvousNote("");
                   }}
                   variant="outline"
                   className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50"

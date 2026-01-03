@@ -34,6 +34,7 @@ export interface Sale {
   fromOrder?: boolean;
   note?: string;
   fragranceDistribution?: Record<string, number>;
+  paymentRendezvous?: PaymentRendezvous[];
 }
 
 // Updated Supermarket interface to match Supabase schema
@@ -74,6 +75,15 @@ export interface Payment {
   amount: number;
   note?: string;
   type?: 'virement' | 'direct' | 'other'; // Payment type to track virement payments
+}
+
+export interface PaymentRendezvous {
+  id: string;
+  date: string;
+  expectedAmount?: number;
+  note?: string;
+  isCompleted: boolean;
+  completedDate?: string;
 }
 
 // Storage Keys

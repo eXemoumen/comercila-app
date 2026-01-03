@@ -12,6 +12,7 @@ import { VirementsPage } from "@/components/VirementsPage";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationsPage } from "@/components/NotificationsPage";
 import { RecapPage } from "@/components/RecapPage";
+import { RendezvousPage } from "@/components/RendezvousPage";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -200,6 +201,9 @@ export default function HomePage() {
 
       case "recap":
         return <RecapPage onBack={handleBack} />;
+
+      case "rendezvous":
+        return <RendezvousPage onBack={handleBack} onNavigate={setActiveTab} />;
 
       case "find-supermarkets":
         // Show the find supermarkets page instead of redirecting

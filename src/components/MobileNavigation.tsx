@@ -12,6 +12,7 @@ import {
   X,
   Sparkles,
   BarChart3,
+  CalendarClock,
 } from "lucide-react";
 import { preloadComponent } from "@/utils/preloadUtils";
 
@@ -79,6 +80,14 @@ const navigationItems: NavigationItem[] = [
     description: "Analyses et statistiques",
     icon: BarChart3,
     color: "from-indigo-500 to-purple-600",
+    action: "navigate",
+  },
+  {
+    id: "rendezvous",
+    label: "Rendez-vous",
+    description: "Paiements planifiés",
+    icon: CalendarClock,
+    color: "from-violet-500 to-purple-600",
     action: "navigate",
   },
   {
@@ -152,6 +161,9 @@ export function MobileNavigation({
         break;
       case "recap":
         preloadComponent(() => import("@/components/RecapPage"));
+        break;
+      case "rendezvous":
+        preloadComponent(() => import("@/components/RendezvousPage"));
         break;
     }
   }, []);

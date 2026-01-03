@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS sales (
     from_order BOOLEAN DEFAULT FALSE,
     note TEXT NULL,
     fragrance_distribution JSONB NULL,
+    payment_rendezvous JSONB NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 

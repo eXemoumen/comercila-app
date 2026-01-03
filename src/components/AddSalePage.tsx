@@ -13,7 +13,9 @@ import {
   Package,
   Loader2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  CalendarClock,
+  Trash2
 } from "lucide-react";
 import {
   getSupermarkets,
@@ -23,7 +25,7 @@ import {
   updateStock,
 } from "@/utils/hybridStorage";
 import { getFragrances } from "@/utils/storage";
-import type { Sale, Supermarket, FragranceStock } from "@/utils/storage";
+import type { Sale, Supermarket, FragranceStock, PaymentRendezvous } from "@/utils/storage";
 
 interface AddSalePageProps {
   onBack: () => void;
@@ -40,7 +42,10 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
   const [priceOption, setPriceOption] = useState<"option1" | "option2">("option1");
   const [isPaidImmediately, setIsPaidImmediately] = useState(false);
   const [paymentNote, setPaymentNote] = useState("");
-  const [expectedPaymentDate, setExpectedPaymentDate] = useState("");
+  const [paymentRendezvous, setPaymentRendezvous] = useState<Omit<PaymentRendezvous, 'id' | 'isCompleted'>[]>([]);
+  const [newRendezvousDate, setNewRendezvousDate] = useState("");
+  const [newRendezvousAmount, setNewRendezvousAmount] = useState("");
+  const [newRendezvousNote, setNewRendezvousNote] = useState("");
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split("T")[0]);
   const [fragranceStock, setFragranceStock] = useState<FragranceStock[]>([]);
   const [fragranceDistribution, setFragranceDistribution] = useState<Record<string, number>>({});
@@ -107,6 +112,31 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
     setFragranceDistribution((prev) => ({ ...prev, [fragranceId]: value }));
   };
 
+  const addRendezvous = () => {
+    if (!newRendezvousDate) {
+      alert("Veuillez sélectionner une date pour le rendez-vous.");
+      return;
+    }
+    
+    setPaymentRendezvous((prev) => [
+      ...prev,
+      {
+        date: newRendezvousDate,
+        expectedAmount: newRendezvousAmount ? parseFloat(newRendezvousAmount) : undefined,
+        note: newRendezvousNote || undefined,
+      },
+    ]);
+    
+    // Reset form
+    setNewRendezvousDate("");
+    setNewRendezvousAmount("");
+    setNewRendezvousNote("");
+  };
+
+  const removeRendezvous = (index: number) => {
+    setPaymentRendezvous((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -138,6 +168,14 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
     setIsSubmitting(true);
 
     try {
+      const rendezvousWithIds: PaymentRendezvous[] = paymentRendezvous.map((rv, index) => ({
+        id: `rv_${Date.now()}_${index}`,
+        date: rv.date,
+        expectedAmount: rv.expectedAmount,
+        note: rv.note,
+        isCompleted: false,
+      }));
+
       const sale: Omit<Sale, "id"> = {
         date: new Date(saleDate).toISOString(),
         supermarketId,
@@ -148,12 +186,13 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         isPaid: isPaidImmediately,
         paymentDate: isPaidImmediately ? new Date(saleDate).toISOString() : undefined,
         paymentNote: !isPaidImmediately ? paymentNote : "",
-        expectedPaymentDate: !isPaidImmediately ? expectedPaymentDate : "",
+        expectedPaymentDate: !isPaidImmediately && rendezvousWithIds.length > 0 ? rendezvousWithIds[0].date : "",
         payments: isPaidImmediately
           ? [{ id: Date.now().toString(), date: new Date(saleDate).toISOString(), amount: totalValue, note: "Paiement complet", type: "direct" }]
           : [],
         remainingAmount: isPaidImmediately ? 0 : totalValue,
         fragranceDistribution: fragranceDistribution,
+        paymentRendezvous: !isPaidImmediately ? rendezvousWithIds : [],
       };
 
       const addedSale = await addSale(sale);
@@ -407,41 +446,168 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
 
       {/* Payment Status */}
       <div className="premium-card p-5 space-y-4">
-        <label className="flex items-center gap-4 cursor-pointer">
-          <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-            isPaidImmediately ? "bg-emerald-500 border-emerald-500" : "border-gray-300"
-          }`}>
-            {isPaidImmediately && <CheckCircle2 className="w-4 h-4 text-white" />}
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+            <CreditCard className="w-5 h-5 text-emerald-600" />
           </div>
-          <input
-            type="checkbox"
-            checked={isPaidImmediately}
-            onChange={(e) => setIsPaidImmediately(e.target.checked)}
-            className="sr-only"
-          />
-          <span className="font-medium text-gray-900">Payé immédiatement</span>
-        </label>
+          <div>
+            <h3 className="font-semibold text-gray-900">Mode de Paiement</h3>
+            <p className="text-xs text-gray-500">Choisissez le type de paiement</p>
+          </div>
+        </div>
 
-        {!isPaidImmediately && (
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Date de paiement prévue</label>
-              <input
-                type="date"
-                className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
-                value={expectedPaymentDate}
-                onChange={(e) => setExpectedPaymentDate(e.target.value)}
-              />
+        {/* Payment Type Selection */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setIsPaidImmediately(true)}
+            className={`p-4 rounded-xl border-2 transition-all text-left ${
+              isPaidImmediately
+                ? "border-emerald-500 bg-emerald-50"
+                : "border-gray-100 hover:border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className={`w-5 h-5 ${isPaidImmediately ? "text-emerald-600" : "text-gray-400"}`} />
+              <span className="font-semibold text-gray-900">Payé Immédiat</span>
             </div>
+            <p className="text-xs text-gray-500">Paiement reçu maintenant</p>
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setIsPaidImmediately(false)}
+            className={`p-4 rounded-xl border-2 transition-all text-left ${
+              !isPaidImmediately
+                ? "border-indigo-500 bg-indigo-50"
+                : "border-gray-100 hover:border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarClock className={`w-5 h-5 ${!isPaidImmediately ? "text-indigo-600" : "text-gray-400"}`} />
+              <span className="font-semibold text-gray-900">Rendez-vous</span>
+            </div>
+            <p className="text-xs text-gray-500">Planifier des dates</p>
+          </button>
+        </div>
+
+        {/* Rendezvous Section */}
+        {!isPaidImmediately && (
+          <div className="space-y-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="w-4 h-4 text-indigo-600" />
+              <h4 className="font-medium text-gray-800">Rendez-vous de Paiement</h4>
+            </div>
+
+            {/* Existing Rendezvous List */}
+            {paymentRendezvous.length > 0 && (
+              <div className="space-y-2">
+                {paymentRendezvous.map((rv, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 rounded-xl bg-indigo-50 border border-indigo-100"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                        <Calendar className="w-4 h-4 text-indigo-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-indigo-800">
+                          {new Date(rv.date).toLocaleDateString("fr-FR", {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-indigo-600">
+                          {rv.expectedAmount && (
+                            <span>{rv.expectedAmount.toLocaleString("fr-DZ")} DZD</span>
+                          )}
+                          {rv.note && <span>• {rv.note}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => removeRendezvous(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add New Rendezvous Form */}
+            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-3">
+              <p className="text-sm font-medium text-gray-700">Ajouter un rendez-vous</p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Date *</label>
+                  <input
+                    type="date"
+                    className="w-full h-10 rounded-lg border border-gray-200 px-3 text-sm bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    value={newRendezvousDate}
+                    onChange={(e) => setNewRendezvousDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Montant prévu</label>
+                  <input
+                    type="number"
+                    placeholder="Ex: 5000"
+                    className="w-full h-10 rounded-lg border border-gray-200 px-3 text-sm bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    value={newRendezvousAmount}
+                    onChange={(e) => setNewRendezvousAmount(e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Note (optionnel)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Paiement partiel..."
+                  className="w-full h-10 rounded-lg border border-gray-200 px-3 text-sm bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  value={newRendezvousNote}
+                  onChange={(e) => setNewRendezvousNote(e.target.value)}
+                />
+              </div>
+              
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full rounded-lg border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                onClick={addRendezvous}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Ajouter ce rendez-vous
+              </Button>
+            </div>
+
+            {/* General Note */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Note</label>
+              <label className="text-sm font-medium text-gray-700">Note générale</label>
               <textarea
-                className="w-full rounded-xl border-2 border-gray-100 p-4 bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all min-h-[80px]"
+                className="w-full rounded-xl border-2 border-gray-100 p-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all min-h-[80px]"
                 value={paymentNote}
                 onChange={(e) => setPaymentNote(e.target.value)}
-                placeholder="Ex: Paiement prévu après 15 jours..."
+                placeholder="Ex: Client fidèle, paiement en plusieurs fois..."
               />
             </div>
+
+            {paymentRendezvous.length === 0 && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                <span className="text-sm text-amber-700">Ajoutez au moins un rendez-vous de paiement</span>
+              </div>
+            )}
           </div>
         )}
       </div>

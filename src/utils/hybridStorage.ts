@@ -499,6 +499,70 @@ export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): 
     }
 };
 
+export const markRendezvousAsCompleted = async (saleId: string, rendezvousId: string): Promise<boolean> => {
+    await initializeStorage();
+
+    if (USE_SUPABASE.sales) {
+        const { markRendezvousAsCompleted: markSupabaseRendezvous } = await import('./supabaseStorage');
+        return await markSupabaseRendezvous(saleId, rendezvousId);
+    }
+    
+    // Local storage fallback - update the sale in local storage
+    try {
+        const sales = await getLocalSales();
+        const saleIndex = sales.findIndex(s => s.id === saleId);
+        if (saleIndex === -1) return false;
+        
+        const sale = sales[saleIndex];
+        if (sale.paymentRendezvous) {
+            sale.paymentRendezvous = sale.paymentRendezvous.map(rv => {
+                if (rv.id === rendezvousId) {
+                    return { ...rv, isCompleted: true, completedDate: new Date().toISOString() };
+                }
+                return rv;
+            });
+            localStorage.setItem('soap_sales', JSON.stringify(sales));
+        }
+        return true;
+    } catch (error) {
+        console.error('Error marking rendezvous as completed:', error);
+        return false;
+    }
+};
+
+export const addRendezvousToSale = async (saleId: string, rendezvous: { date: string; expectedAmount?: number; note?: string }): Promise<boolean> => {
+    await initializeStorage();
+
+    if (USE_SUPABASE.sales) {
+        const { addRendezvousToSale: addSupabaseRendezvous } = await import('./supabaseStorage');
+        return await addSupabaseRendezvous(saleId, rendezvous);
+    }
+    
+    // Local storage fallback
+    try {
+        const sales = await getLocalSales();
+        const saleIndex = sales.findIndex(s => s.id === saleId);
+        if (saleIndex === -1) return false;
+        
+        const sale = sales[saleIndex];
+        const newRendezvous = {
+            id: `rv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            date: rendezvous.date,
+            expectedAmount: rendezvous.expectedAmount,
+            note: rendezvous.note,
+            isCompleted: false
+        };
+        
+        sale.paymentRendezvous = sale.paymentRendezvous || [];
+        sale.paymentRendezvous.push(newRendezvous);
+        localStorage.setItem('soap_sales', JSON.stringify(sales));
+        return true;
+    } catch (error) {
+        console.error('Error adding rendezvous to sale:', error);
+        return false;
+    }
+};
+
 // Hybrid Orders Functions
 export const getOrders = async (): Promise<Order[]> => {
     await initializeStorage();
