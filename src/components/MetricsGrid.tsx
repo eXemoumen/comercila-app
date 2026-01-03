@@ -1,9 +1,16 @@
+"use client";
+
 import React from "react";
 import { MetricCard } from "./MetricCard";
 import { ProfitMetricCard } from "./ProfitMetricCard";
 import { PaidProfitMetricCard } from "./PaidProfitMetricCard";
-import { DollarSign, Package, Truck } from "lucide-react";
-import { isAndroid, mobileUtils } from "@/utils/mobileConfig";
+import { 
+  TrendingUp, 
+  Package, 
+  Truck, 
+  Sparkles,
+  BarChart3
+} from "lucide-react";
 
 export interface MonthlySalesData {
   quantity: number;
@@ -31,101 +38,82 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
     onProfitCardClick,
     onPaidProfitCardClick,
   }) {
-    // Check if mobile and apply Android optimizations
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
-    React.useEffect(() => {
-      console.log("🔍 MetricsGrid Mobile Check:", {
-        isMobile,
-        windowWidth: window.innerWidth,
-        isAndroid:
-          typeof window !== "undefined" &&
-          window.navigator.userAgent.toLowerCase().includes("android"),
-      });
-
-      if (isAndroid() && isMobile) {
-        console.log("🤖 Android mobile detected - applying optimizations");
-        mobileUtils.optimizeForVirements();
-      } else if (isMobile) {
-        console.log("📱 Mobile detected (non-Android)");
-      } else {
-        console.log("🖥️ Desktop detected");
-      }
-    }, [isMobile]);
-
-    console.log("🎨 MetricsGrid Rendering:", {
-      isMobile,
-      hasProfitClick: !!onProfitCardClick,
-      hasPaidProfitCardClick: !!onPaidProfitCardClick,
-    });
+    // Calculate some derived metrics for better insights
+    const cartonsFromQuantity = Math.floor(metrics.quantity / 9);
+    const stockInCartons = Math.floor(metrics.fragmentStock / 9);
+    const profitMargin = metrics.revenue > 0 
+      ? ((metrics.profit / metrics.revenue) * 100).toFixed(1) 
+      : "0";
 
     return (
       <div className={`space-y-6 ${className}`}>
         {/* Section Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
-            <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-blue-500 rounded-full"></div>
-            <span>Métriques du Mois</span>
-          </h2>
-          {metrics.virementPeriod &&
-            metrics.virementPeriod !== "mois en cours" && (
-              <div className="hidden sm:flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <span className="text-sm text-purple-700 font-medium">
-                  {metrics.virementPeriod}
-                </span>
-              </div>
-            )}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30">
+              <BarChart3 className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                Métriques du Mois
+              </h2>
+              <p className="text-sm text-gray-500">
+                Vue d&apos;ensemble de vos performances
+              </p>
+            </div>
+          </div>
+          
+          {metrics.virementPeriod && metrics.virementPeriod !== "mois en cours" && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100">
+              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 animate-pulse" />
+              <span className="text-sm font-medium text-purple-700">
+                {metrics.virementPeriod}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Metrics Grid */}
+        {/* Main Metrics Grid */}
         <div
-          className={`grid gap-6 ${
+          className={`grid gap-4 ${
             isMobile
-              ? "grid-cols-1 sm:grid-cols-2"
+              ? "grid-cols-1"
               : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
           }`}
         >
           {/* Revenue Card */}
-          <div className="order-1">
+          <div className="animate-fade-in-up stagger-1">
             <MetricCard
               title="Chiffre d'Affaires"
               value={`${metrics.revenue.toLocaleString("fr-DZ")} DZD`}
               color="blue"
-              icon={DollarSign}
+              icon={TrendingUp}
               className="h-full"
             >
-              <div className="mt-2 space-y-2">
-                {/* Revenue Breakdown */}
-                <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
-                  <p className="text-xs text-blue-700 font-medium">
-                    📊 Ventes totales
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Quantité:{" "}
-                    {Math.floor(metrics.quantity / 9).toLocaleString("fr-DZ")}
-                    cartons
-                  </p>
+              <div className="space-y-3 pt-2">
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/50">
+                    <p className="text-xs text-blue-600 font-medium mb-1">Quantité</p>
+                    <p className="text-sm font-bold text-blue-900">
+                      {cartonsFromQuantity.toLocaleString("fr-DZ")} cartons
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-3 border border-indigo-100/50">
+                    <p className="text-xs text-indigo-600 font-medium mb-1">Marge</p>
+                    <p className="text-sm font-bold text-indigo-900">
+                      {profitMargin}%
+                    </p>
+                  </div>
                 </div>
-
-                {/* Period Information */}
-                {metrics.virementPeriod &&
-                  metrics.virementPeriod !== "mois en cours" && (
-                    <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
-                      <p className="text-xs text-purple-700 font-medium">
-                        📅 Période: {metrics.virementPeriod}
-                      </p>
-                      <p className="text-xs text-purple-600 mt-1">
-                        CA calculé sur cette période
-                      </p>
-                    </div>
-                  )}
               </div>
             </MetricCard>
           </div>
 
           {/* Profit Card */}
-          <div className="order-2">
+          <div className="animate-fade-in-up stagger-2">
             <ProfitMetricCard
               profit={metrics.profit}
               virementPeriod={metrics.virementPeriod}
@@ -134,7 +122,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
           </div>
 
           {/* Paid Profit Card */}
-          <div className="order-3">
+          <div className="animate-fade-in-up stagger-3">
             <PaidProfitMetricCard
               paidProfit={metrics.paidProfit}
               virementPeriod={metrics.virementPeriod}
@@ -143,7 +131,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
           </div>
 
           {/* Supplier Payment Card */}
-          <div className="order-4">
+          <div className="animate-fade-in-up stagger-4">
             <MetricCard
               title="Paiement Fournisseur"
               value={`${metrics.supplierPayment.toLocaleString("fr-DZ")} DZD`}
@@ -151,63 +139,41 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
               icon={Truck}
               className="h-full"
             >
-              <div className="mt-2 space-y-2">
-                {/* Payment Status */}
-                <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
-                  <p className="text-xs text-purple-700 font-medium">
-                    💰 Montant à payer
-                  </p>
-                  <p className="text-xs text-purple-600 mt-1">
-                    Basé sur les ventes effectuées
+              <div className="space-y-3 pt-2">
+                <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-3 border border-purple-100/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                    <p className="text-xs text-purple-600 font-medium">À payer</p>
+                  </div>
+                  <p className="text-xs text-purple-700">
+                    Basé sur {cartonsFromQuantity} cartons vendus
                   </p>
                 </div>
-
-                {/* Period Information */}
-                {metrics.virementPeriod &&
-                  metrics.virementPeriod !== "mois en cours" && (
-                    <div className="bg-indigo-50 rounded-lg p-2 border border-indigo-200">
-                      <p className="text-xs text-indigo-700 font-medium">
-                        📅 Période: {metrics.virementPeriod}
-                      </p>
-                      <p className="text-xs text-indigo-600 mt-1">
-                        Calculé sur cette période
-                      </p>
-                    </div>
-                  )}
               </div>
             </MetricCard>
           </div>
 
           {/* Fragment Stock Card */}
-          <div className="order-5">
+          <div className="animate-fade-in-up stagger-5">
             <MetricCard
               title="Stock Fragrances"
-              value={`${Math.floor(metrics.fragmentStock / 9).toLocaleString(
-                "fr-DZ"
-              )} cartons`}
+              value={`${stockInCartons.toLocaleString("fr-DZ")} cartons`}
               color="emerald"
               icon={Package}
               className="h-full"
             >
-              <div className="mt-2 space-y-2">
-                {/* Fragment Stock Info */}
-                <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-200">
-                  <p className="text-xs text-emerald-700 font-medium">
-                    🌸 Fragrances disponibles
-                  </p>
-                  <p className="text-xs text-emerald-600 mt-1">
-                    Stock de parfums en détail
+              <div className="space-y-3 pt-2">
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-3 border border-emerald-100/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                    <p className="text-xs text-emerald-600 font-medium">
+                      Fragrances disponibles
+                    </p>
+                  </div>
+                  <p className="text-xs text-emerald-700">
+                    {metrics.fragmentStock.toLocaleString("fr-DZ")} pièces en stock
                   </p>
                 </div>
-
-                {/* Mobile-specific touch feedback */}
-                {isMobile && (
-                  <div className="text-center">
-                    <div className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full">
-                      <Package className="h-4 w-4 text-emerald-600" />
-                    </div>
-                  </div>
-                )}
               </div>
             </MetricCard>
           </div>
@@ -216,4 +182,5 @@ export const MetricsGrid: React.FC<MetricsGridProps> = React.memo(
     );
   }
 );
+
 MetricsGrid.displayName = "MetricsGrid";

@@ -2,12 +2,13 @@
 
 import React, { useMemo, useCallback } from "react";
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  CartesianGrid,
 } from "recharts";
 
 interface MonthlyData {
@@ -21,7 +22,7 @@ interface MonthlyBenefitsChartProps {
   height?: number;
   className?: string;
   currentMonthProfit?: number;
-  type?: "estimated" | "real"; // Add type prop to differentiate between estimated and real benefits
+  type?: "estimated" | "real";
 }
 
 interface CustomTooltipProps {
@@ -30,22 +31,45 @@ interface CustomTooltipProps {
     value: number;
     name: string;
     color: string;
+    payload: {
+      fullName: string;
+      benefit: number;
+      quantity: number;
+    };
   }>;
   label?: string;
+  type: "estimated" | "real";
 }
 
 const CustomTooltip = React.memo(
-  ({ active, payload, label }: CustomTooltipProps) => {
+  ({ active, payload, type }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const isReal = type === "real";
+      
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="text-sm font-medium text-gray-700">{label}</p>
-          <p className="text-sm text-green-600">
-            <span className="font-medium">
-              Bénéfice:{" "}
-              {`${Number(payload[0].value).toLocaleString("fr-DZ")} DZD`}
-            </span>
+        <div className="bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-gray-100">
+          <p className="text-sm font-semibold text-gray-800 mb-2">
+            {data.fullName}
           </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isReal ? 'bg-blue-500' : 'bg-emerald-500'}`} />
+              <span className="text-xs text-gray-500">Bénéfice:</span>
+              <span className={`text-sm font-bold ${isReal ? 'text-blue-600' : 'text-emerald-600'}`}>
+                {data.benefit.toLocaleString("fr-DZ")} DZD
+              </span>
+            </div>
+            {data.quantity > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-gray-300" />
+                <span className="text-xs text-gray-500">Quantité:</span>
+                <span className="text-sm font-medium text-gray-700">
+                  {Math.floor(data.quantity / 9)} cartons
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -73,18 +97,15 @@ const monthNamesMap: Record<string, number> = {
 
 function sortMonthlyData(data: Record<string, MonthlyData>) {
   return Object.entries(data).sort((a, b) => {
-    // Extract month and year from the formatted strings
     const monthA = a[0].split(" ")[0].toLowerCase();
     const yearA = a[0].split(" ")[1];
     const monthB = b[0].split(" ")[0].toLowerCase();
     const yearB = b[0].split(" ")[1];
 
-    // Compare years first
     if (yearA !== yearB) {
       return parseInt(yearA) - parseInt(yearB);
     }
 
-    // If years are equal, compare months
     return (monthNamesMap[monthA] || 0) - (monthNamesMap[monthB] || 0);
   });
 }
@@ -92,35 +113,35 @@ function sortMonthlyData(data: Record<string, MonthlyData>) {
 export const MonthlyBenefitsChart = React.memo(
   ({
     data,
-    height = 200,
+    height = 220,
     className = "",
     currentMonthProfit = 0,
-    type = "estimated", // Default to estimated
+    type = "estimated",
   }: MonthlyBenefitsChartProps) => {
+    const isReal = type === "real";
+    
+    // Colors based on type
+    const colors = useMemo(() => ({
+      stroke: isReal ? "#3b82f6" : "#10b981",
+      fill: isReal ? "url(#blueGradient)" : "url(#greenGradient)",
+      stopColor1: isReal ? "#3b82f6" : "#10b981",
+      stopColor2: isReal ? "#93c5fd" : "#6ee7b7",
+    }), [isReal]);
+
     // Transform and sort data for the chart
     const chartData = useMemo(() => {
-      const barColor = type === "real" ? "#3b82f6" : "#22c55e"; // Blue for real, green for estimated
-
-      return (
-        sortMonthlyData(data)
-          // Take only the last 6 months of data for better visualization
-          .slice(-6)
-          .map(([month, monthData]) => ({
-            name: month.split(" ")[0].substring(0, 3), // Abbreviated month name
-            fullName: month,
-            benefit: monthData.netBenefit,
-            fill: barColor,
-          }))
-      );
-    }, [data, type]);
+      return sortMonthlyData(data)
+        .slice(-6)
+        .map(([month, monthData]) => ({
+          name: month.split(" ")[0].substring(0, 3),
+          fullName: month,
+          benefit: monthData.netBenefit,
+          quantity: monthData.quantity,
+        }));
+    }, [data]);
 
     const chartMargin = useMemo(
-      () => ({
-        top: 5,
-        right: 5,
-        left: 5,
-        bottom: 5,
-      }),
+      () => ({ top: 20, right: 20, left: 0, bottom: 0 }),
       []
     );
 
@@ -129,97 +150,96 @@ export const MonthlyBenefitsChart = React.memo(
       []
     );
 
-    const xAxisTick = useMemo(
-      () => ({
-        fontSize: 12,
-        fill: "#6B7280",
-      }),
-      []
-    );
-
-    const yAxisTick = useMemo(
-      () => ({
-        fontSize: 12,
-        fill: "#6B7280",
-      }),
-      []
-    );
-
-    const tooltipCursor = useMemo(
-      () => ({
-        fill:
-          type === "real"
-            ? "rgba(59, 130, 246, 0.1)"
-            : "rgba(34, 197, 94, 0.1)",
-      }),
-      [type]
-    );
-
-    const barRadius = useMemo(
-      () => [4, 4, 0, 0] as [number, number, number, number],
-      []
-    );
-
     const formattedCurrentMonthProfit = useMemo(
       () => currentMonthProfit.toLocaleString("fr-DZ"),
       [currentMonthProfit]
     );
 
+    // Calculate max value for better Y axis
+    const maxBenefit = useMemo(() => {
+      const max = Math.max(...chartData.map(d => d.benefit), 0);
+      return Math.ceil(max / 10000) * 10000 || 10000;
+    }, [chartData]);
+
     return (
       <div className={`w-full ${className}`}>
         <div style={{ height }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={chartMargin} accessibilityLayer>
+            <AreaChart data={chartData} margin={chartMargin}>
+              <defs>
+                <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.05} />
+                </linearGradient>
+                <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              
+              <CartesianGrid 
+                strokeDasharray="3 3" 
+                stroke="#e5e7eb" 
+                vertical={false}
+              />
+              
               <XAxis
                 dataKey="name"
                 axisLine={false}
                 tickLine={false}
-                tick={xAxisTick}
-                aria-label="Mois"
+                tick={{ fontSize: 12, fill: "#6b7280", fontWeight: 500 }}
+                dy={10}
               />
+              
               <YAxis
                 axisLine={false}
                 tickLine={false}
-                tick={yAxisTick}
+                tick={{ fontSize: 11, fill: "#9ca3af" }}
                 tickFormatter={tickFormatter}
-                aria-label="Bénéfice en DZD"
+                domain={[0, maxBenefit]}
+                width={45}
               />
-              <Tooltip content={<CustomTooltip />} cursor={tooltipCursor} />
-              <Bar
+              
+              <Tooltip 
+                content={<CustomTooltip type={type} />}
+                cursor={{ stroke: colors.stroke, strokeWidth: 1, strokeDasharray: "5 5" }}
+              />
+              
+              <Area
+                type="monotone"
                 dataKey="benefit"
-                radius={barRadius}
-                name="Bénéfice"
-                aria-label="Bénéfice mensuel"
+                stroke={colors.stroke}
+                strokeWidth={3}
+                fill={colors.fill}
+                dot={{ 
+                  fill: colors.stroke, 
+                  strokeWidth: 2, 
+                  stroke: "#fff",
+                  r: 4
+                }}
+                activeDot={{ 
+                  r: 6, 
+                  fill: colors.stroke,
+                  stroke: "#fff",
+                  strokeWidth: 2
+                }}
               />
-            </BarChart>
+            </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Footer with current month info */}
-        <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 rounded-b-xl">
-          {type === "real"
-            ? "Bénéfice réel ce mois-ci:"
-            : "Bénéfice estimé ce mois-ci:"}{" "}
-          <span
-            className={`font-medium ${
-              type === "real" ? "text-blue-600" : "text-green-600"
-            }`}
-          >
-            {formattedCurrentMonthProfit} DZD
-          </span>
-          <div className="flex items-center mt-1 gap-2">
-            <div className="flex items-center">
-              <div
-                className={`w-3 h-3 rounded-full mr-1 ${
-                  type === "real" ? "bg-blue-500" : "bg-green-500"
-                }`}
-              ></div>
-              <span>
-                {type === "real"
-                  ? "Bénéfice réel mensuel"
-                  : "Bénéfice estimé mensuel"}
+        <div className={`mt-4 p-3 rounded-xl ${isReal ? 'bg-blue-50' : 'bg-emerald-50'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`w-3 h-3 rounded-full ${isReal ? 'bg-blue-500' : 'bg-emerald-500'}`} />
+              <span className="text-sm text-gray-600">
+                {isReal ? "Bénéfice réel ce mois" : "Bénéfice estimé ce mois"}
               </span>
             </div>
+            <span className={`text-lg font-bold ${isReal ? 'text-blue-600' : 'text-emerald-600'}`}>
+              {formattedCurrentMonthProfit} DZD
+            </span>
           </div>
         </div>
       </div>

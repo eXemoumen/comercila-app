@@ -6,9 +6,9 @@ import {
   Pie,
   Cell,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
+import { Package, Sparkles } from "lucide-react";
 
 interface FragranceStockData {
   name: string;
@@ -34,13 +34,24 @@ interface CustomTooltipProps {
 
 const CustomTooltip = React.memo(({ active, payload }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
-    const data = payload[0];
+    const data = payload[0].payload;
     return (
-      <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-        <p className="text-sm font-medium text-gray-700">{data.name}</p>
-        <p className="text-sm text-purple-600">
-          <span className="font-medium">{`${data.value} cartons`}</span>
-        </p>
+      <div className="bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-gray-100">
+        <div className="flex items-center gap-2 mb-2">
+          <div
+            className="w-4 h-4 rounded-full shadow-sm"
+            style={{ backgroundColor: data.color }}
+          />
+          <p className="text-sm font-semibold text-gray-800">{data.name}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-lg font-bold text-gray-900">
+            {data.value} cartons
+          </p>
+          <p className="text-xs text-gray-500">
+            {data.value * 9} pièces
+          </p>
+        </div>
       </div>
     );
   }
@@ -70,19 +81,16 @@ const CustomLabel = React.memo(
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
-    // Only show percentage if it's significant enough (>5%)
-    if (percent < 0.05) return null;
+    if (percent < 0.08) return null;
 
     return (
       <text
         x={x}
         y={y}
         fill="#fff"
-        textAnchor={x > cx ? "start" : "end"}
+        textAnchor="middle"
         dominantBaseline="central"
-        fontSize={12}
-        fontWeight="bold"
-        className="drop-shadow-sm"
+        className="text-xs font-bold drop-shadow-md"
       >
         {`${(percent * 100).toFixed(0)}%`}
       </text>
@@ -92,59 +100,47 @@ const CustomLabel = React.memo(
 
 CustomLabel.displayName = "CustomLabel";
 
-interface LegendEntry {
-  value: string;
-  color: string;
-}
-
-interface LegendProps {
-  payload?: LegendEntry[];
-}
-
-const CustomLegend = React.memo((props: LegendProps) => {
-  const { payload } = props;
-  return (
-    <div className="flex flex-wrap justify-center gap-2 mt-2">
-      {payload?.map((entry: LegendEntry, index: number) => (
-        <div key={index} className="flex items-center gap-1">
-          <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: entry.color }}
-          />
-          <span className="text-xs text-gray-600">{entry.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-});
-
-CustomLegend.displayName = "CustomLegend";
-
 export const FragranceStockChart = React.memo(function FragranceStockChart({
   data,
-  height = 300,
+  height = 280,
   className = "",
   totalStock = 0,
 }: FragranceStockChartProps) {
-  // Filter out entries with zero values for cleaner visualization
   const filteredData = useMemo(
     () => data.filter((item) => item.value > 0),
     [data]
   );
 
-  const outerRadius = useMemo(() => Math.min(height * 0.35, 100), [height]);
-
-  const totalStockInCartons = useMemo(
+  const totalCartons = useMemo(
     () => Math.floor(totalStock / 9),
     [totalStock]
   );
 
-  const legendWrapperStyle = useMemo(
-    () => ({
-      paddingTop: "10px",
-    }),
-    []
+  const totalPieces = useMemo(
+    () => filteredData.reduce((sum, item) => sum + item.value * 9, 0),
+    [filteredData]
   );
+
+  const outerRadius = useMemo(() => Math.min(height * 0.35, 90), [height]);
+  const innerRadius = useMemo(() => outerRadius * 0.6, [outerRadius]);
+
+  if (filteredData.length === 0) {
+    return (
+      <div className={`w-full ${className}`}>
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-100 to-violet-100 flex items-center justify-center mb-4">
+            <Package className="w-10 h-10 text-purple-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">
+            Stock vide
+          </h3>
+          <p className="text-sm text-gray-500 text-center max-w-xs">
+            Aucun stock de fragrances disponible. Ajoutez du stock pour voir la distribution.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`w-full ${className}`}>
@@ -157,39 +153,74 @@ export const FragranceStockChart = React.memo(function FragranceStockChart({
               cy="50%"
               labelLine={false}
               outerRadius={outerRadius}
+              innerRadius={innerRadius}
               fill="#8884d8"
               dataKey="value"
               nameKey="name"
               label={CustomLabel}
-              aria-label="Distribution du stock par parfum"
+              paddingAngle={2}
             >
               {filteredData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={entry.color}
                   stroke="#fff"
-                  strokeWidth={2}
+                  strokeWidth={3}
+                  className="transition-all duration-300 hover:opacity-80"
                 />
               ))}
             </Pie>
             <Tooltip content={<CustomTooltip />} />
-            <Legend
-              content={<CustomLegend />}
-              wrapperStyle={legendWrapperStyle}
-            />
           </PieChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Footer with total stock info */}
-      <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 rounded-b-xl">
-        Stock total:{" "}
-        <span className="font-medium text-purple-600">
-          {totalStockInCartons} cartons
-        </span>
-        {filteredData.length === 0 && (
-          <span className="ml-2 text-amber-600">Aucun stock disponible</span>
-        )}
+      {/* Center Stats */}
+      <div className="flex justify-center -mt-4 mb-4">
+        <div className="bg-white rounded-2xl shadow-lg px-6 py-3 border border-gray-100">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">{totalCartons}</p>
+            <p className="text-xs text-gray-500">cartons total</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Legend Grid */}
+      <div className="grid grid-cols-2 gap-2 px-2">
+        {filteredData.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            <div
+              className="w-3 h-3 rounded-full shadow-sm flex-shrink-0"
+              style={{ backgroundColor: item.color }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-gray-700 truncate">
+                {item.name}
+              </p>
+            </div>
+            <span className="text-xs font-bold text-gray-900">
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-purple-500" />
+            <span className="text-sm text-purple-700">
+              {filteredData.length} fragrances en stock
+            </span>
+          </div>
+          <span className="text-sm font-bold text-purple-700">
+            {totalPieces.toLocaleString("fr-DZ")} pièces
+          </span>
+        </div>
       </div>
     </div>
   );

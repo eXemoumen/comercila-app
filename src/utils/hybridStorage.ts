@@ -503,10 +503,22 @@ export const addPayment = async (saleId: string, payment: Omit<Payment, 'id'>): 
 export const getOrders = async (): Promise<Order[]> => {
     await initializeStorage();
 
-    if (USE_SUPABASE.orders) {
-        return await getSupabaseOrders();
+    if (USE_SUPABASE.orders && networkDetector.isOnline()) {
+        try {
+            const orders = await getSupabaseOrders();
+            // If we got orders from Supabase, return them
+            if (orders.length > 0) {
+                return orders;
+            }
+            // Fall back to local if Supabase returned empty
+            const localOrders = await getLocalOrders();
+            return localOrders;
+        } catch (error) {
+            console.warn('Failed to fetch orders from Supabase, falling back to local:', error);
+            return await getLocalOrders();
+        }
     } else {
-        return getLocalOrders();
+        return await getLocalOrders();
     }
 };
 

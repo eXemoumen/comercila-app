@@ -257,28 +257,33 @@ export const updateSupabaseSalePayment = async (saleId: string, isPaid: boolean,
 
 // Orders CRUD
 export const getSupabaseOrders = async (): Promise<Order[]> => {
-    const { data, error } = await supabase
-        .from("orders")
-        .select(`
-      *,
-      supermarkets (name)
-    `)
-        .order('date', { ascending: false });
+    try {
+        const { data, error } = await supabase
+            .from("orders")
+            .select(`
+          *,
+          supermarkets (name)
+        `)
+            .order('date', { ascending: false });
 
-    if (error) {
-        console.error("Error fetching orders:", error);
+        if (error) {
+            console.error("Error fetching orders:", error.message || error.code || JSON.stringify(error));
+            return [];
+        }
+
+        return data?.map(o => ({
+            id: o.id,
+            date: o.date,
+            supermarketId: o.supermarket_id,
+            supermarketName: (o.supermarkets as { name: string })?.name || 'Unknown',
+            quantity: o.quantity,
+            status: o.status as "pending" | "delivered" | "cancelled",
+            pricePerUnit: o.price_per_unit
+        })) || [];
+    } catch (err) {
+        console.error("Exception fetching orders:", err);
         return [];
     }
-
-    return data?.map(o => ({
-        id: o.id,
-        date: o.date,
-        supermarketId: o.supermarket_id,
-        supermarketName: (o.supermarkets as { name: string })?.name || 'Unknown',
-        quantity: o.quantity,
-        status: o.status as "pending" | "delivered" | "cancelled",
-        pricePerUnit: o.price_per_unit
-    })) || [];
 };
 
 export const addSupabaseOrder = async (order: Omit<Order, 'id' | 'status'>): Promise<Order | null> => {

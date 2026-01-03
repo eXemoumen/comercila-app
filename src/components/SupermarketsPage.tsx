@@ -1,9 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Plus, ChevronRight, Search } from "lucide-react";
+import { 
+  ChevronLeft, 
+  Plus, 
+  ChevronRight, 
+  Search, 
+  MapPin, 
+  Phone, 
+  Store,
+  X,
+  Loader2
+} from "lucide-react";
 import { getSupermarkets, addSupermarket } from "@/utils/hybridStorage";
 import type { Supermarket, PhoneNumber } from "@/utils/storage";
 
@@ -26,23 +35,22 @@ export function SupermarketsPage({
     longitude: 3.0588,
   });
   const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
-  const [filteredSupermarkets, setFilteredSupermarkets] = useState<
-    Supermarket[]
-  >([]);
+  const [filteredSupermarkets, setFilteredSupermarkets] = useState<Supermarket[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isLoadingList, setIsLoadingList] = useState(true);
 
-  // Load supermarkets on component mount
   useEffect(() => {
     const loadSupermarkets = async () => {
+      setIsLoadingList(true);
       const loadedSupermarkets = await getSupermarkets();
       setSupermarkets(loadedSupermarkets);
       setFilteredSupermarkets(loadedSupermarkets);
+      setIsLoadingList(false);
     };
     loadSupermarkets();
   }, []);
 
-  // Filter supermarkets based on search query
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredSupermarkets(supermarkets);
@@ -61,20 +69,18 @@ export function SupermarketsPage({
     setLoading(true);
 
     try {
-      // Make sure at least one phone number is provided
       if (!newSupermarket.phone_numbers[0].number) {
         alert("Veuillez entrer au moins un numéro de téléphone");
         setLoading(false);
         return;
       }
 
-      // Try to geocode the address, but use default coordinates if it fails
-      let latitude = 36.7538; // Default coordinates for Algeria
+      let latitude = 36.7538;
       let longitude = 3.0588;
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         const response = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
@@ -89,18 +95,11 @@ export function SupermarketsPage({
         if (data && data.length > 0) {
           latitude = parseFloat(data[0].lat);
           longitude = parseFloat(data[0].lon);
-          console.log("Geocoding successful:", { latitude, longitude });
-        } else {
-          console.log("Geocoding failed, using default coordinates");
         }
-      } catch (geocodingError) {
-        console.log(
-          "Geocoding service unavailable, using default coordinates:",
-          geocodingError
-        );
+      } catch {
+        console.log("Geocoding service unavailable, using default coordinates");
       }
 
-      // Create a properly formatted supermarket object for Supabase
       const supabaseSupermarket = {
         name: newSupermarket.name,
         address: newSupermarket.address,
@@ -112,18 +111,10 @@ export function SupermarketsPage({
         ),
       };
 
-      console.log("Adding supermarket:", supabaseSupermarket);
-
-      // Add the supermarket
       const added = await addSupermarket(supabaseSupermarket);
-      console.log("Added supermarket result:", added);
 
       if (added) {
-        // Success - reset form and state
         setShowAddForm(false);
-        alert("Supermarché ajouté avec succès!");
-
-        // Reset form
         setNewSupermarket({
           name: "",
           address: "",
@@ -133,15 +124,11 @@ export function SupermarketsPage({
           longitude: 3.0588,
         });
 
-        // Refresh the supermarkets list
         const loadedSupermarkets = await getSupermarkets();
         setSupermarkets(loadedSupermarkets);
         setFilteredSupermarkets(loadedSupermarkets);
       } else {
-        // Failed to add
-        alert(
-          "Erreur: Impossible d'ajouter le supermarché. Vérifiez la console pour plus de détails."
-        );
+        alert("Erreur: Impossible d'ajouter le supermarché.");
       }
     } catch (error) {
       console.error("Error adding supermarket:", error);
@@ -152,88 +139,109 @@ export function SupermarketsPage({
   };
 
   return (
-    <div className="space-y-4 pb-20">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" onClick={onBack} className="mr-1">
+    <div className="space-y-6 pb-20">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={onBack} 
+            className="rounded-xl hover:bg-gray-100"
+          >
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-xl font-bold text-gray-800">Supermarchés</h1>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Supermarchés</h1>
+            <p className="text-sm text-gray-500">
+              {supermarkets.length} client{supermarkets.length !== 1 ? 's' : ''} enregistré{supermarkets.length !== 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
         <Button
-          size="sm"
-          className="rounded-full px-3 shadow-sm"
           onClick={() => setShowAddForm(true)}
+          className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
         >
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="h-4 w-4 mr-2" />
           Nouveau
         </Button>
       </div>
 
       {/* Search Bar */}
       <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
           <Search className="h-5 w-5 text-gray-400" />
         </div>
         <input
           type="text"
           placeholder="Rechercher un supermarché..."
-          className="w-full h-12 pl-10 pr-4 rounded-xl border border-gray-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+          className="w-full h-12 pl-12 pr-4 rounded-xl border-2 border-gray-100 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm text-gray-900 placeholder:text-gray-400"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute inset-y-0 right-0 pr-4 flex items-center"
+          >
+            <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+          </button>
+        )}
       </div>
 
       {/* Add Supermarket Form */}
       {showAddForm && (
-        <Card className="border-none shadow-md rounded-xl overflow-hidden mb-5">
-          <form onSubmit={handleSubmit} className="space-y-4 p-4">
+        <div className="premium-card overflow-hidden animate-scale-in">
+          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <Store className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Nouveau Supermarché</h3>
+                <p className="text-white/80 text-xs">Ajoutez un nouveau client</p>
+              </div>
+            </div>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="p-5 space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
                 Nom du Supermarché
               </label>
               <input
                 type="text"
-                className="w-full h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
                 value={newSupermarket.name}
                 onChange={(e) =>
-                  setNewSupermarket((prev) => ({
-                    ...prev,
-                    name: e.target.value,
-                  }))
+                  setNewSupermarket((prev) => ({ ...prev, name: e.target.value }))
                 }
+                placeholder="Ex: Supermarché Central"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Adresse
-              </label>
+              <label className="text-sm font-medium text-gray-700">Adresse</label>
               <input
                 type="text"
-                className="w-full h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
                 value={newSupermarket.address}
                 onChange={(e) =>
-                  setNewSupermarket((prev) => ({
-                    ...prev,
-                    address: e.target.value,
-                  }))
+                  setNewSupermarket((prev) => ({ ...prev, address: e.target.value }))
                 }
+                placeholder="Adresse complète"
                 required
-                placeholder="Adresse complète du supermarché"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Téléphone
-              </label>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <label className="text-sm font-medium text-gray-700">Contact</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
                   placeholder="Nom du contact"
-                  className="flex-1 h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                  className="h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
                   value={newSupermarket.phone_numbers[0].name}
                   onChange={(e) =>
                     setNewSupermarket((prev) => ({
@@ -247,80 +255,129 @@ export function SupermarketsPage({
                 <input
                   type="tel"
                   placeholder="Numéro de téléphone"
-                  className="flex-1 h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                  className="h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
                   value={newSupermarket.phone_numbers[0].number}
                   onChange={(e) =>
                     setNewSupermarket((prev) => ({
                       ...prev,
                       phone_numbers: prev.phone_numbers.map((phone, index) =>
-                        index === 0
-                          ? { ...phone, number: e.target.value }
-                          : phone
+                        index === 0 ? { ...phone, number: e.target.value } : phone
                       ),
                     }))
                   }
+                  required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
-                Email (Optionnel)
+                Email <span className="text-gray-400">(optionnel)</span>
               </label>
               <input
                 type="email"
-                className="w-full h-12 rounded-xl border border-gray-200 px-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
                 value={newSupermarket.email}
                 onChange={(e) =>
-                  setNewSupermarket((prev) => ({
-                    ...prev,
-                    email: e.target.value,
-                  }))
+                  setNewSupermarket((prev) => ({ ...prev, email: e.target.value }))
                 }
-                placeholder="Entrez l'email (optionnel)"
+                placeholder="email@exemple.com"
               />
             </div>
 
-            <div className="flex space-x-2 pt-2">
-              <Button type="submit" className="flex-1" disabled={loading}>
-                {loading ? "Ajout en cours..." : "Confirmer"}
+            <div className="flex gap-3 pt-2">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="flex-1 h-12 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-lg"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Ajout en cours...
+                  </>
+                ) : (
+                  "Confirmer"
+                )}
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
+                className="flex-1 h-12 rounded-xl border-2"
                 onClick={() => setShowAddForm(false)}
               >
                 Annuler
               </Button>
             </div>
           </form>
-        </Card>
+        </div>
       )}
 
-      <div className="space-y-2">
-        {filteredSupermarkets.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            {searchQuery.trim() === ""
-              ? "Aucun supermarché enregistré"
-              : `Aucun supermarché trouvé pour "${searchQuery}"`}
+      {/* Supermarkets List */}
+      <div className="space-y-3">
+        {isLoadingList ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="premium-card p-4 animate-pulse">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gray-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-1/3" />
+                    <div className="h-3 bg-gray-100 rounded w-2/3" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredSupermarkets.length === 0 ? (
+          <div className="premium-card p-8 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+              <Store className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+              {searchQuery.trim() === ""
+                ? "Aucun supermarché"
+                : "Aucun résultat"}
+            </h3>
+            <p className="text-sm text-gray-500">
+              {searchQuery.trim() === ""
+                ? "Commencez par ajouter votre premier client"
+                : `Aucun supermarché trouvé pour "${searchQuery}"`}
+            </p>
           </div>
         ) : (
-          filteredSupermarkets.map((supermarket) => (
+          filteredSupermarkets.map((supermarket, index) => (
             <div
               key={supermarket.id}
-              className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+              className="premium-card p-4 cursor-pointer group animate-fade-in-up"
+              style={{ animationDelay: `${index * 50}ms` }}
               onClick={() => onViewSupermarket(supermarket.id)}
             >
-              <div>
-                <h3 className="font-medium">{supermarket.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {supermarket.address}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-medium">Voir détails</p>
-                <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-4">
+                {/* Icon */}
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center group-hover:from-indigo-200 group-hover:to-purple-200 transition-colors">
+                  <Store className="w-6 h-6 text-indigo-600" />
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-900 truncate group-hover:text-indigo-600 transition-colors">
+                    {supermarket.name}
+                  </h3>
+                  <div className="flex items-center gap-1 text-sm text-gray-500 mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="truncate">{supermarket.address}</span>
+                  </div>
+                  {supermarket.phone_numbers && supermarket.phone_numbers.length > 0 && (
+                    <div className="flex items-center gap-1 text-sm text-gray-400 mt-0.5">
+                      <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{supermarket.phone_numbers[0].number}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Arrow */}
+                <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" />
               </div>
             </div>
           ))

@@ -2,7 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Minus, Plus } from "lucide-react";
+import { 
+  ChevronLeft, 
+  Minus, 
+  Plus, 
+  ShoppingCart, 
+  Store, 
+  Calendar,
+  CreditCard,
+  Package,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
+} from "lucide-react";
 import {
   getSupermarkets,
   addSale,
@@ -23,36 +35,23 @@ interface AddSalePageProps {
 }
 
 export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
-  const [supermarketId, setSupermarketId] = useState(
-    preFillData?.supermarketId || ""
-  );
-  const [cartons, setCartons] = useState(
-    preFillData ? Math.ceil(preFillData.quantity / 9) : 0
-  );
-  const [priceOption, setPriceOption] = useState<"option1" | "option2">(
-    "option1"
-  );
+  const [supermarketId, setSupermarketId] = useState(preFillData?.supermarketId || "");
+  const [cartons, setCartons] = useState(preFillData ? Math.ceil(preFillData.quantity / 9) : 0);
+  const [priceOption, setPriceOption] = useState<"option1" | "option2">("option1");
   const [isPaidImmediately, setIsPaidImmediately] = useState(false);
   const [paymentNote, setPaymentNote] = useState("");
   const [expectedPaymentDate, setExpectedPaymentDate] = useState("");
-  const [saleDate, setSaleDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().split("T")[0]);
   const [fragranceStock, setFragranceStock] = useState<FragranceStock[]>([]);
-  const [fragranceDistribution, setFragranceDistribution] = useState<
-    Record<string, number>
-  >({});
+  const [fragranceDistribution, setFragranceDistribution] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [allSupermarkets, setAllSupermarkets] = useState<Supermarket[]>([]);
-  const [filteredSupermarkets, setFilteredSupermarkets] = useState<
-    Supermarket[]
-  >([]);
+  const [filteredSupermarkets, setFilteredSupermarkets] = useState<Supermarket[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load fragrance data
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load all data in parallel for better performance
         const [stock, fragrances, supermarkets] = await Promise.all([
           getFragranceStock(),
           getFragrances(),
@@ -63,13 +62,10 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         setAllSupermarkets(supermarkets);
         setFilteredSupermarkets(supermarkets);
 
-        // Initialize fragrance distribution
         const initialDistribution: Record<string, number> = {};
-        fragrances.forEach(
-          (fragrance: { id: string; name: string; color: string }) => {
-            initialDistribution[fragrance.id] = 0;
-          }
-        );
+        fragrances.forEach((fragrance: { id: string }) => {
+          initialDistribution[fragrance.id] = 0;
+        });
         setFragranceDistribution(initialDistribution);
       } catch (error) {
         console.error("Error loading initial data:", error);
@@ -79,67 +75,43 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
     loadData();
   }, []);
 
-  // Filter supermarkets when search query changes
   useEffect(() => {
-    // Use a debounced search to prevent too many re-renders
     const timeoutId = setTimeout(() => {
       if (searchQuery.trim() === "") {
-        // If search is empty, show all supermarkets
         setFilteredSupermarkets(allSupermarkets);
       } else {
-        // Filter from the all supermarkets
         const filtered = allSupermarkets.filter((sm) =>
           sm.name.toLowerCase().includes(searchQuery.toLowerCase())
         );
         setFilteredSupermarkets(filtered);
       }
-    }, 300); // 300ms debounce
+    }, 300);
 
     return () => clearTimeout(timeoutId);
   }, [searchQuery, allSupermarkets]);
 
-  // Calculate quantity based on cartons (9 pieces per carton)
   const quantity = cartons * 9;
 
-  // Price options configuration
   const priceOptions = {
-    option1: {
-      pricePerUnit: 180,
-      benefitPerUnit: 25,
-      costToSupplier: 155,
-      label: "Option 1 (180 DZD)",
-    },
-    option2: {
-      pricePerUnit: 180,
-      benefitPerUnit: 17,
-      costToSupplier: 163,
-      label: "Option 2 (180 DZD)",
-    },
+    option1: { pricePerUnit: 180, benefitPerUnit: 25, costToSupplier: 155 },
+    option2: { pricePerUnit: 180, benefitPerUnit: 17, costToSupplier: 163 },
   };
 
   const selectedPrice = priceOptions[priceOption];
   const totalValue = quantity * selectedPrice.pricePerUnit;
   const totalBenefit = quantity * selectedPrice.benefitPerUnit;
   const totalCostToSupplier = quantity * selectedPrice.costToSupplier;
+  const totalDistributed = Object.values(fragranceDistribution).reduce((sum, qty) => sum + qty, 0);
 
   const handleFragranceChange = (fragranceId: string, value: number): void => {
-    setFragranceDistribution((prev) => ({
-      ...prev,
-      [fragranceId]: value,
-    }));
+    setFragranceDistribution((prev) => ({ ...prev, [fragranceId]: value }));
   };
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Prevent double submission
-    if (isSubmitting) {
-      return;
-    }
+    if (isSubmitting) return;
 
-    // Basic validation
     if (!supermarketId) {
       alert("Veuillez sélectionner un supermarché.");
       return;
@@ -150,27 +122,15 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
       return;
     }
 
-    // Validate fragrance distribution
-    const totalFragranceQty = Object.values(fragranceDistribution).reduce(
-      (sum, qty) => sum + qty,
-      0
-    );
-    if (totalFragranceQty !== cartons) {
-      alert(
-        `La distribution des parfums (${totalFragranceQty} cartons) doit correspondre au total des cartons vendus (${cartons} cartons).`
-      );
+    if (totalDistributed !== cartons) {
+      alert(`La distribution des parfums (${totalDistributed} cartons) doit correspondre au total (${cartons} cartons).`);
       return;
     }
 
-    // Verify we have enough stock for each fragrance
     for (const [fragranceId, qty] of Object.entries(fragranceDistribution)) {
-      const fragrance = fragranceStock.find(
-        (f) => f.fragranceId === fragranceId
-      );
+      const fragrance = fragranceStock.find((f) => f.fragranceId === fragranceId);
       if (fragrance && qty > fragrance.quantity) {
-        alert(
-          `Stock insuffisant pour le parfum "${fragrance.name}". Vous avez ${fragrance.quantity} cartons en stock.`
-        );
+        alert(`Stock insuffisant pour "${fragrance.name}". Disponible: ${fragrance.quantity} cartons.`);
         return;
       }
     }
@@ -186,382 +146,297 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
         pricePerUnit: selectedPrice.pricePerUnit,
         totalValue,
         isPaid: isPaidImmediately,
-        paymentDate: isPaidImmediately
-          ? saleDate
-            ? new Date(saleDate).toISOString()
-            : new Date().toISOString()
-          : undefined,
+        paymentDate: isPaidImmediately ? new Date(saleDate).toISOString() : undefined,
         paymentNote: !isPaidImmediately ? paymentNote : "",
         expectedPaymentDate: !isPaidImmediately ? expectedPaymentDate : "",
         payments: isPaidImmediately
-          ? [
-              {
-                id: Date.now().toString(),
-                date: saleDate
-                  ? new Date(saleDate).toISOString()
-                  : new Date().toISOString(),
-                amount: totalValue,
-                note: "Paiement complet",
-                type: "direct",
-              },
-            ]
+          ? [{ id: Date.now().toString(), date: new Date(saleDate).toISOString(), amount: totalValue, note: "Paiement complet", type: "direct" }]
           : [],
         remainingAmount: isPaidImmediately ? 0 : totalValue,
         fragranceDistribution: fragranceDistribution,
       };
 
-      // Add the sale first
-
       const addedSale = await addSale(sale);
 
-      if (!addedSale) {
-        throw new Error("Failed to add sale to database");
-      }
+      if (!addedSale) throw new Error("Failed to add sale");
 
-      // Update stock by removing the sold cartons with fragrance distribution
       await updateStock(
         -cartons,
         "removed",
-        `Vente de ${cartons} cartons (${quantity} pièces) - ${new Date(
-          saleDate
-        ).toLocaleDateString()}`,
+        `Vente de ${cartons} cartons - ${new Date(saleDate).toLocaleDateString()}`,
         fragranceDistribution
       );
 
-      // Delete order if it was a pre-filled order
       if (preFillData?.orderId) {
         await deleteOrder(preFillData.orderId);
       }
 
-      // Dispatch event to refresh all data
-
-      const event = new CustomEvent("saleDataChanged");
-      window.dispatchEvent(event);
-
-      // Go back to previous page
+      window.dispatchEvent(new CustomEvent("saleDataChanged"));
       onBack();
     } catch (error) {
-      console.error("❌ Error during sale process:", error);
-      alert(
-        `Erreur lors de l'enregistrement de la vente: ${
-          error instanceof Error ? error.message : "Erreur inconnue"
-        }`
-      );
+      console.error("Error during sale process:", error);
+      alert(`Erreur: ${error instanceof Error ? error.message : "Erreur inconnue"}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 pb-20">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            className="mr-1"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-bold text-gray-800">
+    <form onSubmit={handleSubmit} className="space-y-6 pb-24">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Button type="button" variant="ghost" size="icon" onClick={onBack} className="rounded-xl">
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
             {preFillData ? "Confirmer la Livraison" : "Nouvelle Vente"}
           </h1>
+          <p className="text-sm text-gray-500">Enregistrez une nouvelle transaction</p>
         </div>
       </div>
 
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Date de vente
-          </label>
-          <input
-            type="date"
-            className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
-            value={saleDate}
-            onChange={(e) => setSaleDate(e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Supermarché
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Rechercher un supermarché..."
-              className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm mb-2"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <select
-              className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
-              value={supermarketId}
-              onChange={(e) => setSupermarketId(e.target.value)}
-              required
-            >
-              <option value="">Sélectionner un supermarché</option>
-              {filteredSupermarkets.map((sm) => (
-                <option key={sm.id} value={sm.id}>
-                  {sm.name}
-                </option>
-              ))}
-            </select>
+      {/* Date Selection */}
+      <div className="premium-card p-5 space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+            <Calendar className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Date de vente</h3>
+            <p className="text-xs text-gray-500">Sélectionnez la date de la transaction</p>
           </div>
         </div>
+        <input
+          type="date"
+          className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+          value={saleDate}
+          onChange={(e) => setSaleDate(e.target.value)}
+          required
+        />
+      </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Nombre de Cartons (9 pièces/carton)
-          </label>
-          <div className="flex items-center">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-l-xl h-12 w-12 flex items-center justify-center border-gray-200"
-              onClick={() => setCartons((c) => Math.max(0, c - 1))}
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
+      {/* Supermarket Selection */}
+      <div className="premium-card p-5 space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
+            <Store className="w-5 h-5 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Supermarché</h3>
+            <p className="text-xs text-gray-500">Sélectionnez le client</p>
+          </div>
+        </div>
+        <input
+          type="text"
+          placeholder="Rechercher..."
+          className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all mb-2"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <select
+          className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+          value={supermarketId}
+          onChange={(e) => setSupermarketId(e.target.value)}
+          required
+        >
+          <option value="">Sélectionner un supermarché</option>
+          {filteredSupermarkets.map((sm) => (
+            <option key={sm.id} value={sm.id}>{sm.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Quantity Selection */}
+      <div className="premium-card p-5 space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+            <Package className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Quantité</h3>
+            <p className="text-xs text-gray-500">9 pièces par carton</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-14 w-14 rounded-xl border-2"
+            onClick={() => setCartons((c) => Math.max(0, c - 1))}
+          >
+            <Minus className="h-5 w-5" />
+          </Button>
+          <div className="text-center min-w-[120px]">
             <input
               type="number"
-              className="flex-1 h-12 text-center border-x-0 border-y border-gray-200"
+              className="w-full text-center text-3xl font-bold text-gray-900 bg-transparent border-none focus:outline-none"
               value={cartons}
-              onChange={(e) => {
-                const value =
-                  e.target.value === "" ? 0 : parseInt(e.target.value);
-                setCartons(value);
-              }}
-              onBlur={() => {
-                if (cartons < 0) setCartons(0);
-              }}
+              onChange={(e) => setCartons(parseInt(e.target.value) || 0)}
               min="0"
-              required
             />
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-r-xl h-12 w-12 flex items-center justify-center border-gray-200"
-              onClick={() => setCartons((c) => c + 1)}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+            <p className="text-sm text-gray-500">cartons</p>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-14 w-14 rounded-xl border-2"
+            onClick={() => setCartons((c) => c + 1)}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
         </div>
+        
+        <div className="text-center p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+          <span className="text-emerald-700 font-medium">{quantity} pièces</span>
+        </div>
+      </div>
 
-        {/* Fragrance distribution section - now mandatory */}
-        {cartons > 0 && (
-          <div className="space-y-3 mt-4 border p-4 rounded-xl border-blue-100 bg-blue-50">
-            <div>
-              <span className="text-sm font-medium text-blue-700">
-                Distribution par Parfum (Obligatoire)
-              </span>
-              <p className="text-xs text-blue-500 mt-1">
-                Spécifiez la quantité exacte de chaque parfum
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              {fragranceStock.map((fragrance) => (
-                <div key={fragrance.fragranceId} className="space-y-1">
-                  <div className="flex items-center">
-                    <div
-                      className="w-3 h-3 rounded-full mr-1"
-                      style={{ backgroundColor: fragrance.color }}
-                    />
-                    <label className="text-sm text-gray-600">
-                      {fragrance.name}
-                      <span className="text-xs text-gray-400 ml-1">
-                        (Stock: {fragrance.quantity})
-                      </span>
-                    </label>
-                  </div>
-                  <div className="flex items-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 w-8 flex items-center justify-center border-gray-200 rounded-l-lg"
-                      onClick={() =>
-                        handleFragranceChange(
-                          fragrance.fragranceId,
-                          Math.max(
-                            0,
-                            (fragranceDistribution[fragrance.fragranceId] ||
-                              0) - 1
-                          )
-                        )
-                      }
-                    >
-                      <Minus className="h-3 w-3" />
-                    </Button>
-                    <input
-                      type="number"
-                      className="h-8 w-full text-center text-sm border-x-0 border-y border-gray-200"
-                      value={fragranceDistribution[fragrance.fragranceId] || 0}
-                      onChange={(e) =>
-                        handleFragranceChange(
-                          fragrance.fragranceId,
-                          parseInt(e.target.value) || 0
-                        )
-                      }
-                      min="0"
-                      max={fragrance.quantity}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 w-8 flex items-center justify-center border-gray-200 rounded-r-lg"
-                      onClick={() => {
-                        const currentValue =
-                          fragranceDistribution[fragrance.fragranceId] || 0;
-                        if (currentValue < fragrance.quantity) {
-                          handleFragranceChange(
-                            fragrance.fragranceId,
-                            currentValue + 1
-                          );
-                        }
-                      }}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between text-sm text-blue-600 pt-1">
+      {/* Fragrance Distribution */}
+      {cartons > 0 && (
+        <div className="premium-card p-5 space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+                <ShoppingCart className="w-5 h-5 text-purple-600" />
+              </div>
               <div>
-                Total distribué:{" "}
-                {Object.values(fragranceDistribution).reduce(
-                  (sum, qty) => sum + qty,
-                  0
-                )}{" "}
-                / {cartons} cartons
+                <h3 className="font-semibold text-gray-900">Distribution</h3>
+                <p className="text-xs text-gray-500">Répartition par parfum</p>
               </div>
-              {Object.values(fragranceDistribution).reduce(
-                (sum, qty) => sum + qty,
-                0
-              ) !== cartons && (
-                <div className="text-red-500 font-medium">
-                  Les quantités doivent correspondre exactement
-                </div>
-              )}
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              totalDistributed === cartons 
+                ? "bg-emerald-100 text-emerald-700" 
+                : "bg-amber-100 text-amber-700"
+            }`}>
+              {totalDistributed}/{cartons}
             </div>
           </div>
-        )}
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Quantité Totale (Pièces)
-          </label>
-          <div className="flex items-center border border-gray-200 rounded-xl p-3 bg-gray-50">
-            <span className="text-lg font-medium">{quantity} pièces</span>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Option de Prix
-          </label>
           <div className="grid grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant={priceOption === "option1" ? "default" : "outline"}
-              className={`w-full rounded-xl py-3 px-4 h-auto ${
-                priceOption === "option1"
-                  ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
-                  : "bg-white hover:bg-gray-50 border-gray-200"
-              }`}
-              onClick={() => setPriceOption("option1")}
-            >
-              <div className="text-left">
-                <div className="font-medium text-base">180 DZD</div>
-                <div
-                  className={`text-xs ${
-                    priceOption === "option1"
-                      ? "text-blue-100"
-                      : "text-gray-500"
-                  }`}
-                >
-                  Retour: 155 DZD/unité
+            {fragranceStock.map((fragrance) => (
+              <div key={fragrance.fragranceId} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: fragrance.color }} />
+                  <span className="text-sm font-medium text-gray-700 truncate">{fragrance.name}</span>
                 </div>
-              </div>
-            </Button>
-            <Button
-              type="button"
-              variant={priceOption === "option2" ? "default" : "outline"}
-              className={`w-full rounded-xl py-3 px-4 h-auto ${
-                priceOption === "option2"
-                  ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md border-transparent"
-                  : "bg-white hover:bg-gray-50 border-gray-200"
-              }`}
-              onClick={() => setPriceOption("option2")}
-            >
-              <div className="text-left">
-                <div className="font-medium text-base">180 DZD</div>
-                <div
-                  className={`text-xs ${
-                    priceOption === "option2"
-                      ? "text-blue-100"
-                      : "text-gray-500"
-                  }`}
-                >
-                  Retour: 163 DZD/unité
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg"
+                    onClick={() => handleFragranceChange(fragrance.fragranceId, Math.max(0, (fragranceDistribution[fragrance.fragranceId] || 0) - 1))}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                  <input
+                    type="number"
+                    className="flex-1 h-8 text-center text-sm font-medium bg-white rounded-lg border"
+                    value={fragranceDistribution[fragrance.fragranceId] || 0}
+                    onChange={(e) => handleFragranceChange(fragrance.fragranceId, parseInt(e.target.value) || 0)}
+                    min="0"
+                    max={fragrance.quantity}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg"
+                    onClick={() => {
+                      const current = fragranceDistribution[fragrance.fragranceId] || 0;
+                      if (current < fragrance.quantity) handleFragranceChange(fragrance.fragranceId, current + 1);
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
                 </div>
+                <p className="text-xs text-gray-400 mt-1 text-center">Stock: {fragrance.quantity}</p>
               </div>
-            </Button>
+            ))}
+          </div>
+
+          {totalDistributed !== cartons && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <span className="text-sm text-amber-700">Les quantités doivent correspondre exactement</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Price Options */}
+      <div className="premium-card p-5 space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
+            <CreditCard className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Option de Prix</h3>
+            <p className="text-xs text-gray-500">Sélectionnez le tarif</p>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Valeur totale
-          </label>
-          <div className="flex items-center border border-gray-200 rounded-xl p-3 bg-gray-50">
-            <span className="text-lg font-medium text-blue-600">
-              {totalValue.toLocaleString("fr-DZ")} DZD
-            </span>
-          </div>
+        <div className="grid grid-cols-2 gap-3">
+          {(["option1", "option2"] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setPriceOption(opt)}
+              className={`p-4 rounded-xl border-2 transition-all text-left ${
+                priceOption === opt
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-gray-100 hover:border-gray-200"
+              }`}
+            >
+              <p className="text-lg font-bold text-gray-900">180 DZD</p>
+              <p className="text-xs text-gray-500">
+                Retour: {priceOptions[opt].costToSupplier} DZD/u
+              </p>
+              <p className="text-xs text-emerald-600 font-medium mt-1">
+                Bénéfice: {priceOptions[opt].benefitPerUnit} DZD/u
+              </p>
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div className="flex items-center space-x-2 p-3 border border-gray-200 rounded-xl">
+      {/* Payment Status */}
+      <div className="premium-card p-5 space-y-4">
+        <label className="flex items-center gap-4 cursor-pointer">
+          <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+            isPaidImmediately ? "bg-emerald-500 border-emerald-500" : "border-gray-300"
+          }`}>
+            {isPaidImmediately && <CheckCircle2 className="w-4 h-4 text-white" />}
+          </div>
           <input
             type="checkbox"
-            id="isPaid"
             checked={isPaidImmediately}
             onChange={(e) => setIsPaidImmediately(e.target.checked)}
-            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="sr-only"
           />
-          <label
-            htmlFor="isPaid"
-            className="text-base font-medium text-gray-700"
-          >
-            Payé immédiatement
-          </label>
-        </div>
+          <span className="font-medium text-gray-900">Payé immédiatement</span>
+        </label>
 
         {!isPaidImmediately && (
-          <div className="space-y-4 border rounded-xl p-4 bg-gray-50">
+          <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Date de paiement prévue
-              </label>
+              <label className="text-sm font-medium text-gray-700">Date de paiement prévue</label>
               <input
                 type="date"
-                className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                className="w-full h-12 rounded-xl border-2 border-gray-100 px-4 bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
                 value={expectedPaymentDate}
                 onChange={(e) => setExpectedPaymentDate(e.target.value)}
               />
             </div>
-
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Note de paiement
-              </label>
+              <label className="text-sm font-medium text-gray-700">Note</label>
               <textarea
-                className="w-full rounded-xl border border-gray-200 p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm min-h-[100px]"
+                className="w-full rounded-xl border-2 border-gray-100 p-4 bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all min-h-[80px]"
                 value={paymentNote}
                 onChange={(e) => setPaymentNote(e.target.value)}
                 placeholder="Ex: Paiement prévu après 15 jours..."
@@ -569,48 +444,53 @@ export function AddSalePage({ onBack, preFillData }: AddSalePageProps) {
             </div>
           </div>
         )}
+      </div>
 
-        <div className="rounded-xl bg-gray-50 p-4 text-sm border border-gray-200">
-          <p className="font-medium mb-2 text-gray-800">Information:</p>
-          <div className="space-y-1">
-            <p>1 carton = 9 pièces de savon</p>
-            <p>
-              Quantité totale = {cartons} cartons × 9 = {quantity} pièces
-            </p>
-            <p>Prix unitaire = {selectedPrice.pricePerUnit} DZD</p>
-            <p>
-              Montant total = {quantity} × {selectedPrice.pricePerUnit} ={" "}
-              {totalValue.toLocaleString("fr-DZ")} DZD
-            </p>
-            <p className="text-green-600">
-              Bénéfice total = {totalBenefit.toLocaleString("fr-DZ")} DZD
-            </p>
-            <p className="text-red-600">
-              À retourner au fournisseur ={" "}
-              {totalCostToSupplier.toLocaleString("fr-DZ")} DZD
-            </p>
+      {/* Summary */}
+      <div className="premium-card p-5 bg-gradient-to-br from-gray-50 to-slate-50">
+        <h3 className="font-semibold text-gray-900 mb-4">Récapitulatif</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Quantité</span>
+            <span className="font-medium">{cartons} cartons ({quantity} pcs)</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Prix unitaire</span>
+            <span className="font-medium">{selectedPrice.pricePerUnit} DZD</span>
+          </div>
+          <div className="h-px bg-gray-200 my-2" />
+          <div className="flex justify-between text-base">
+            <span className="font-medium text-gray-900">Total</span>
+            <span className="font-bold text-blue-600">{totalValue.toLocaleString("fr-DZ")} DZD</span>
+          </div>
+          <div className="flex justify-between text-emerald-600">
+            <span>Bénéfice</span>
+            <span className="font-semibold">{totalBenefit.toLocaleString("fr-DZ")} DZD</span>
+          </div>
+          <div className="flex justify-between text-amber-600">
+            <span>À retourner</span>
+            <span className="font-semibold">{totalCostToSupplier.toLocaleString("fr-DZ")} DZD</span>
           </div>
         </div>
-
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full h-14 mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? (
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-              {preFillData
-                ? "Confirmation en cours..."
-                : "Enregistrement en cours..."}
-            </div>
-          ) : preFillData ? (
-            "Confirmer la Livraison"
-          ) : (
-            "Enregistrer la Vente"
-          )}
-        </Button>
       </div>
+
+      {/* Submit Button */}
+      <Button
+        type="submit"
+        disabled={isSubmitting || totalDistributed !== cartons}
+        className="w-full h-14 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg shadow-blue-500/25 text-base font-semibold disabled:opacity-50"
+      >
+        {isSubmitting ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            {preFillData ? "Confirmation..." : "Enregistrement..."}
+          </>
+        ) : preFillData ? (
+          "Confirmer la Livraison"
+        ) : (
+          "Enregistrer la Vente"
+        )}
+      </Button>
     </form>
   );
 }
